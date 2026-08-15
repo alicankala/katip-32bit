@@ -1247,59 +1247,6 @@ onMounted(async () => {
           </div>
         </div>
 
-        <!-- 7. DESTEK DURUMU -->
-        <div class="settings-card panel admin-section admin-support-highlight">
-          <div class="card-header">
-            <div class="card-header-title">
-              <i class="pi pi-verified card-icon icon-amber"></i>
-              <div>
-                <h2>Destek Durumu</h2>
-                <div class="card-subtitle">Gerçek zamanlı yetki ve sistem teşhis özeti</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="support-status-grid">
-            <div class="status-cell">
-              <span class="cell-lbl">Aktif Kullanıcı</span>
-              <span class="cell-val">Alican Kala</span>
-            </div>
-
-            <div class="status-cell">
-              <span class="cell-lbl">Oturum Tipi</span>
-              <span class="cell-val text-amber font-semibold">Destek Modu</span>
-            </div>
-
-            <div class="status-cell">
-              <span class="cell-lbl">Veritabanı Bağlantısı</span>
-              <span class="cell-val text-green font-semibold">
-                <span class="dot dot-green"></span> Aktif
-              </span>
-            </div>
-
-            <div class="status-cell">
-              <span class="cell-lbl">Uygulama Durumu</span>
-              <span class="cell-val text-green font-semibold">
-                <span class="dot dot-green"></span> Çalışıyor
-              </span>
-            </div>
-
-            <div class="status-cell">
-              <span class="cell-lbl">Son Yedekleme</span>
-              <span class="cell-val">{{ destekBilgileri.lastBackupDate }}</span>
-            </div>
-
-            <div class="status-cell">
-              <span class="cell-lbl">Son Bütünlük Kontrolü</span>
-              <span class="cell-val">{{ sonKontrolTarihi }} ({{ sonKontrolMesaji }})</span>
-            </div>
-
-            <div class="status-cell">
-              <span class="cell-lbl">Uygulama Sürümü</span>
-              <span class="cell-val">v1.0.0</span>
-            </div>
-          </div>
-        </div>
       </template>
 
       <!-- Alt Kaydetme Çubuğu -->
@@ -1559,10 +1506,6 @@ onMounted(async () => {
   border-left: 3px solid #10b981;
 }
 
-.admin-support-highlight {
-  border-left: 3px solid #f59e0b;
-}
-
 .action-btn-group {
   display: flex;
   flex-wrap: wrap;
@@ -1616,48 +1559,6 @@ onMounted(async () => {
 .break-all {
   word-break: break-all;
   color: var(--accent-color);
-}
-
-/* Support Status Grid */
-.support-status-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 10px;
-}
-
-.status-cell {
-  background: var(--bg-active-box);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.cell-lbl {
-  font-size: 11px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.cell-val {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-title);
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  display: inline-block;
-}
-
-.dot-green {
-  background-color: #10b981;
-  box-shadow: 0 0 5px #10b981;
 }
 
 /* Sticky Save Bar */
