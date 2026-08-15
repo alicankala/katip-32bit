@@ -1,6 +1,29 @@
-# Kâtip (32-bit / x86 Windows sürümü)
+# Kâtip (32-bit / Windows 7 sürümü)
 
-Bu repo, [alicankala/katip](https://github.com/alicankala/katip) 64-bit projesinin 32-bit (x86) Windows kurulum dosyası üretmek için ayrılmış koludur. `electron-builder.json5` burada yalnızca `ia32` hedefler ve kendi GitHub release/otomatik güncelleme kanalını kullanır, böylece 64-bit sürümle karışmaz. Kaynak kod aksi belirtilmedikçe ana repoyla birebir aynıdır.
+Bu repo, [alicankala/katip](https://github.com/alicankala/katip) projesinin **32-bit (x86) ve Windows 7** hedefli koludur. Kendi GitHub release/otomatik güncelleme kanalını kullanır, böylece 64-bit sürümle karışmaz.
+
+## Ana repodan farkları — değiştirmeden önce okuyun
+
+Bu farklar keyfi değil, Windows 7 desteğinin zorunlu kıldığı şeylerdir. Herhangi birini geri almak uygulamanın Windows 7'de **açılmamasına** yol açar.
+
+| Konu | Bu repo | Neden |
+|---|---|---|
+| Electron | **22.3.27** (sabit) | Electron 23+ Windows 7/8/8.1 desteğini kaldırdı. 22, Win7 çalıştıran son sürüm. Yükseltilirse üretilen `.exe` alt sistem sürümü 10.00 olur ve Win7 "geçerli bir Win32 uygulaması değil" hatası verir. |
+| Modül biçimi | **CommonJS** (`package.json`'da `"type": "module"` yok) | Electron 22 ana süreçte ESModule çalıştıramıyor. Bu alan eklenirse `main.js` ESM üretilir ve uygulama açılmaz. |
+| better-sqlite3 | **9.6.0** (sabit) | 10+ sürümlerin Electron 22 (ABI v110) için hazır 32-bit derlemesi yok; kaynaktan derleme Visual Studio + Python ister. |
+| Dış HTTP istekleri | `node:https` (`marketController.ts`) | Electron 22'nin Node 16'sında global `fetch` yok (Node 18 ile geldi). Döviz kuru ve hava durumu bu yüzden `istekAt()` yardımcısını kullanır. |
+| Hedef mimari | yalnızca `ia32` | 64-bit kurulum dosyasıyla karışmasın diye; dosya adı da `-x86` eki taşır. |
+
+Sürüm yükseltmesi gerekirse önce yukarıdaki tablodaki kısıtları doğrulayın.
+
+## Derleme
+
+```bash
+npm install --ignore-scripts   # better-sqlite3 9.6.0'in guncel Node icin hazir derlemesi yok
+npm run build                  # cikti: release/<surum>/Katip-Windows-x86-<surum>-Setup.exe
+```
+
+Native modül (better-sqlite3) doğru hedefe (Electron 22 / ia32) derlemeyi `electron-builder` kendi adımında yapar; bu yüzden kurulumda betikleri atlamak sorun çıkarmaz.
 
 ---
 

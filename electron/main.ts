@@ -1,6 +1,5 @@
 import { initDB, ayarlariGetirBackend } from './database.js'
 import { app, BrowserWindow, ipcMain, Menu, type IpcMainInvokeEvent } from 'electron'
-import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import log from 'electron-log/main'
 import { autoUpdater } from 'electron-updater'
@@ -30,9 +29,9 @@ import {
   otomatikYedekAlBackend
 } from './controllers/backupController.js'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-
+// Paket CommonJS olarak üretiliyor (bkz. package.json'da "type" alanının olmaması):
+// Electron 22 ana süreçte ESModule çalıştıramadığı için __dirname/__filename
+// Node tarafından hazır veriliyor; ayrıca import.meta.url'den türetmeye gerek yok.
 process.env.APP_ROOT = path.join(__dirname, '..')
 
 export const VITE_DEV_SERVER_URL = process.env['VITE_DEV_SERVER_URL']
@@ -87,7 +86,7 @@ function createWindow() {
     icon: path.join(process.env.VITE_PUBLIC, 'icon.ico'),
     autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.mjs')
+      preload: path.join(__dirname, 'preload.js')
     }
   })
 

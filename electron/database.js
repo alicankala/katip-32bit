@@ -4,8 +4,10 @@ import { app } from 'electron'
 import { createRequire } from 'node:module'
 import { hashPin, verifyPin, setActiveSalt } from './security'
 
-const require = createRequire(import.meta.url)
-const Database = require('better-sqlite3')
+// Paket CommonJS üretildiği için __filename hazır geliyor; native modül Vite'in
+// paketleyicisine girmeden Node'un gerçek require'ıyla yükleniyor.
+const nodeRequire = createRequire(__filename)
+const Database = nodeRequire('better-sqlite3')
 
 const dbPath = path.join(app.getPath('userData'), 'otoservis.db')
 let activeDb = new Database(dbPath)

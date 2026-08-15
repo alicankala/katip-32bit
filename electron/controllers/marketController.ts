@@ -5,6 +5,8 @@
 // içindeki weather_city anahtarından okunur (varsayılan: Ankara).
 
 import db from '../database.js'
+import http from 'node:http'
+import https from 'node:https'
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
@@ -20,6 +22,84 @@ const CACHE_SURESI_MS = 30 * 60 * 1000 // 30 dakika
 // "Kur verisi çözümlenemedi" hatası veriyordu. Bu yüzden dış isteklerde sabit,
 // ASCII bir User-Agent gönderiliyor.
 const USER_AGENT = 'Katip/1.0 (Windows)'
+
+// ── Basit HTTP istemcisi ──────────────────────────────────────────────
+// Electron 22 (Windows 7'yi destekleyen son sürüm) Node 16 taşıyor ve Node 16'da
+// global `fetch` yok; o Node 18 ile geldi. Dışarıya giden istekler bu yüzden
+// node:https üzerinden yapılıyor. Dönen nesne fetch'in yalnızca burada kullanılan
+// alanlarını (ok/status/text/json) taklit ediyor, böylece çağrı yerleri aynı kaldı.
+interface BasitYanit {
+  ok: boolean
+  status: number
+  text: () => Promise<string>
+  json: () => Promise<any>
+}
+
+function istekAt(url: string, timeoutMs = 10000, kalanYonlendirme = 3): Promise<BasitYanit> {
+  return new Promise((resolve, reject) => {
+    let sonuclandi = false
+    const bitir = (islem: () => void) => {
+      if (sonuclandi) return
+      sonuclandi = true
+      islem()
+    }
+
+    let hedef: URL
+    try {
+      hedef = new URL(url)
+    } catch {
+      reject(new Error(`Geçersiz adres: ${url}`))
+      return
+    }
+
+    const modul = hedef.protocol === 'http:' ? http : https
+    const req = modul.request(
+      hedef,
+      { method: 'GET', headers: { 'User-Agent': USER_AGENT, Accept: '*/*' } },
+      (res) => {
+        const kod = res.statusCode || 0
+
+        // fetch yönlendirmeleri kendiliğinden izliyordu; node:https izlemiyor.
+        // TCMB ve Open-Meteo zaman zaman yönlendirme döndürdüğü için elle izleniyor.
+        if (kod >= 300 && kod < 400 && res.headers.location && kalanYonlendirme > 0) {
+          res.resume()
+          const yeniAdres = new URL(res.headers.location, hedef).toString()
+          bitir(() => {
+            istekAt(yeniAdres, timeoutMs, kalanYonlendirme - 1).then(resolve, reject)
+          })
+          return
+        }
+
+        const parcalar: Buffer[] = []
+        res.on('data', (parca: Buffer) => parcalar.push(parca))
+        res.on('end', () => {
+          const govde = Buffer.concat(parcalar).toString('utf8')
+          bitir(() =>
+            resolve({
+              ok: kod >= 200 && kod < 300,
+              status: kod,
+              text: () => Promise.resolve(govde),
+              json: () => {
+                try {
+                  return Promise.resolve(JSON.parse(govde))
+                } catch {
+                  return Promise.reject(new Error('Sunucu yanıtı çözümlenemedi.'))
+                }
+              }
+            })
+          )
+        })
+        res.on('error', (err) => bitir(() => reject(err)))
+      }
+    )
+
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error('İstek zaman aşımına uğradı.'))
+    })
+    req.on('error', (err) => bitir(() => reject(err)))
+    req.end()
+  })
+}
 
 interface KurBilgisi {
   alis: number | null
@@ -51,36 +131,28 @@ function kurAyikla(xml: string, code: string): KurBilgisi | null {
 }
 
 async function kurlariGetir(): Promise<KurVerisi> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 10000)
-  try {
-    const res = await fetch(TCMB_URL, {
-      signal: controller.signal,
-      headers: { 'User-Agent': USER_AGENT }
-    })
-    if (!res.ok) {
-      throw new Error(`TCMB kur servisi yanıt vermedi (HTTP ${res.status}).`)
-    }
-    const xml = await res.text()
+  // Zaman aşımı istekAt içinde yönetiliyor; ayrıca AbortController gerekmiyor.
+  const res = await istekAt(TCMB_URL)
+  if (!res.ok) {
+    throw new Error(`TCMB kur servisi yanıt vermedi (HTTP ${res.status}).`)
+  }
+  const xml = await res.text()
 
-    const kurlar: Record<string, KurBilgisi> = {}
-    for (const code of ['USD', 'EUR', 'GBP']) {
-      const kur = kurAyikla(xml, code)
-      if (kur) kurlar[code] = kur
-    }
+  const kurlar: Record<string, KurBilgisi> = {}
+  for (const code of ['USD', 'EUR', 'GBP']) {
+    const kur = kurAyikla(xml, code)
+    if (kur) kurlar[code] = kur
+  }
 
-    if (Object.keys(kurlar).length === 0) {
-      throw new Error('Kur verisi çözümlenemedi.')
-    }
+  if (Object.keys(kurlar).length === 0) {
+    throw new Error('Kur verisi çözümlenemedi.')
+  }
 
-    const tarihMatch = xml.match(/Tarih="([^"]+)"/)
-    return {
-      kurlar,
-      kaynakTarihi: tarihMatch ? tarihMatch[1] : null,
-      guncellendi: new Date().toISOString()
-    }
-  } finally {
-    clearTimeout(timeout)
+  const tarihMatch = xml.match(/Tarih="([^"]+)"/)
+  return {
+    kurlar,
+    kaynakTarihi: tarihMatch ? tarihMatch[1] : null,
+    guncellendi: new Date().toISOString()
   }
 }
 
@@ -113,17 +185,8 @@ function havaDurumuAciklama(kod: number): string {
   return 'Bilinmiyor'
 }
 
-async function zamanAsimliFetch(url: string, timeoutMs = 10000): Promise<Response> {
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), timeoutMs)
-  try {
-    return await fetch(url, {
-      signal: controller.signal,
-      headers: { 'User-Agent': USER_AGENT }
-    })
-  } finally {
-    clearTimeout(timeout)
-  }
+async function zamanAsimliFetch(url: string, timeoutMs = 10000): Promise<BasitYanit> {
+  return istekAt(url, timeoutMs)
 }
 
 async function havaDurumuGetir(sehir: string): Promise<HavaVerisi> {

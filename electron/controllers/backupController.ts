@@ -13,8 +13,8 @@ const execFileAsync = promisify(execFile)
 // paketinde native modülün __filename/__dirname'e dayanan yükleme mantığı
 // bozuluyor ("__filename is not defined"). database.js'teki gibi Node'un
 // gerçek CommonJS require'ı kullanılmalı.
-const require = createRequire(import.meta.url)
-const Database = require('better-sqlite3')
+const nodeRequire = createRequire(__filename)
+const Database = nodeRequire('better-sqlite3')
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message

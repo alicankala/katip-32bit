@@ -14,5 +14,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
+      # Tip denetimi native modul gerektirmiyor. --ignore-scripts, better-sqlite3'un
+      # kaynaktan derlenmeye kalkip Python/Visual Studio aramasini engelliyor.
+      - run: npm ci --ignore-scripts
       - run: npx vue-tsc --noEmit
