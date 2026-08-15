@@ -3,6 +3,7 @@ import { app, BrowserWindow, ipcMain, Menu, type IpcMainInvokeEvent } from 'elec
 import path from 'node:path'
 import log from 'electron-log/main'
 import { autoUpdater } from 'electron-updater'
+import { NodeHttpExecutor } from './nodeHttpExecutor.js'
 import { runPhoneServerMigrations } from './phoneServer.js'
 import { isRestoreInProgress } from './restoreState.js'
 import { getActiveMasterSession } from './session.js'
@@ -239,6 +240,13 @@ function guncellemeDurumunuYayinla(yeni: GuncellemeDurumu): void {
 function guncellemeDinleyicileriniKur(): void {
   if (guncellemeDinleyicileriKuruldu) return
   guncellemeDinleyicileriKuruldu = true
+
+  // Ağ katmanı Electron'un net modülünden Node'a alınıyor. Gerekçesi
+  // nodeHttpExecutor.ts başındaki notta: Windows 7'nin kök sertifika deposu
+  // güncel olmadığı için Chromium GitHub'a ERR_CERT_AUTHORITY_INVALID veriyor.
+  // httpExecutor electron-updater'ın tip tanımlarında yer almadığı için cast
+  // gerekiyor; çalışma zamanında sıradan bir özellik (bkz. AppUpdater.js).
+  ;(autoUpdater as unknown as { httpExecutor: unknown }).httpExecutor = new NodeHttpExecutor()
 
   autoUpdater.logger = log
   autoUpdater.autoDownload = true

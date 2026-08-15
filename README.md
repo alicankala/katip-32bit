@@ -12,6 +12,8 @@ Bu farklar keyfi değil, Windows 7 desteğinin zorunlu kıldığı şeylerdir. H
 | Modül biçimi | **CommonJS** (`package.json`'da `"type": "module"` yok) | Electron 22 ana süreçte ESModule çalıştıramıyor. Bu alan eklenirse `main.js` ESM üretilir ve uygulama açılmaz. |
 | better-sqlite3 | **9.6.0** (sabit) | 10+ sürümlerin Electron 22 (ABI v110) için hazır 32-bit derlemesi yok; kaynaktan derleme Visual Studio + Python ister. |
 | Dış HTTP istekleri | `node:https` (`marketController.ts`) | Electron 22'nin Node 16'sında global `fetch` yok (Node 18 ile geldi). Döviz kuru ve hava durumu bu yüzden `istekAt()` yardımcısını kullanır. |
+| Güncelleme ağ katmanı | `NodeHttpExecutor` (`nodeHttpExecutor.ts`) | Chromium sertifikaları **Windows'un kök sertifika deposundan** doğrular; Windows 7'nin deposu 2020'den beri güncellenmediği için GitHub `ERR_CERT_AUTHORITY_INVALID` veriyordu. Node kendi gömülü CA listesini taşıdığı için istekler oraya taşındı. Electron'un `net` modülüne geri dönmeyin. |
+| Arşivleme | `adm-zip` (`backupController.ts`) | Windows'un `tar.exe`'si ancak Windows 10 build 17063 ile geldi; Windows 7'de yok. `tar.exe` kullanılırsa yedekleme, geri yükleme ve sıfırlama bozulur. Uygulama kodunda **hiçbir dış program çağrısı olmamalı**. |
 | Hedef mimari | yalnızca `ia32` | 64-bit kurulum dosyasıyla karışmasın diye; dosya adı da `-x86` eki taşır. |
 
 Sürüm yükseltmesi gerekirse önce yukarıdaki tablodaki kısıtları doğrulayın.
