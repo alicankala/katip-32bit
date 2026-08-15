@@ -1402,11 +1402,19 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
           .replace(/ö/g, 'o')
       }
 
+      if (!arama) {
+        return { success: true, gecmis: [] }
+      }
+
       const temizArama = normalizeString(arama)
       const temizAramaLike = `%${temizArama}%`
-      const plakaTemizArama = `%${temizArama.replace(/\s+/g, '')}%`
+      const bosluksuzArama = `%${temizArama.replace(/[\s\-()]/g, '')}%`
 
-      const kayitlar = db.prepare(`
+      // normalize_text SQLite tarafında Türkçe karakter/büyük-küçük harf farkını siler
+      const sadelestir = (kolon: string) =>
+        `REPLACE(REPLACE(REPLACE(REPLACE(normalize_text(${kolon}), ' ', ''), '-', ''), '(', ''), ')', '')`
+
+      const gecmis = db.prepare(`
         SELECT 
           work_orders.*,
           vehicles.plate,
@@ -1427,26 +1435,28 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
         JOIN customers ON vehicles.customer_id = customers.id
         LEFT JOIN masters opened_master ON work_orders.opened_by_master_id = opened_master.id
         LEFT JOIN masters closed_master ON work_orders.closed_by_master_id = closed_master.id
-        WHERE 
-          LOWER(TRIM(customers.name)) LIKE ? OR
-          LOWER(TRIM(customers.phone)) LIKE ? OR
-          REPLACE(LOWER(TRIM(vehicles.plate)), ' ', '') LIKE ? OR
-          LOWER(TRIM(vehicles.brand)) LIKE ? OR
-          LOWER(TRIM(vehicles.model)) LIKE ? OR
-          LOWER(TRIM(vehicles.chassis)) LIKE ? OR
-          CAST(work_orders.id AS TEXT) LIKE ?
+        WHERE
+          normalize_text(customers.name) LIKE :arama OR
+          ${sadelestir('customers.phone')} LIKE :bosluksuz OR
+          ${sadelestir('vehicles.plate')} LIKE :bosluksuz OR
+          normalize_text(vehicles.brand) LIKE :arama OR
+          normalize_text(vehicles.model) LIKE :arama OR
+          normalize_text(vehicles.chassis) LIKE :arama OR
+          normalize_text(work_orders.description) LIKE :arama OR
+          CAST(work_orders.id AS TEXT) LIKE :arama OR
+          EXISTS (
+            SELECT 1
+            FROM work_order_items
+            WHERE work_order_items.work_order_id = work_orders.id
+              AND normalize_text(work_order_items.description) LIKE :arama
+          )
         ORDER BY work_orders.id DESC
-      `).all(
-        temizAramaLike,
-        temizAramaLike,
-        plakaTemizArama,
-        temizAramaLike,
-        temizAramaLike,
-        temizAramaLike,
-        temizAramaLike
-      )
+      `).all({
+        arama: temizAramaLike,
+        bosluksuz: bosluksuzArama
+      })
 
-      return { success: true, kayitlar }
+      return { success: true, gecmis }
     } catch (error) {
       console.error('Servis geçmişi arama hatası:', error)
       return { success: false, error: getErrorMessage(error) }

@@ -195,12 +195,16 @@ const onerileriGoster = () => {
   }
 }
 
+const sadelestir = (deger) => String(deger || '').toLowerCase().replace(/[\s\-()]/g, '')
+
 const oneriTuruGetir = (oneri) => {
-  const query = (gecmisAramaMetni.value || '').toLowerCase()
-  if (oneri.plate && oneri.plate.toLowerCase().includes(query)) {
+  const query = sadelestir(gecmisAramaMetni.value)
+  if (!query) return 'Müşteri'
+
+  if (sadelestir(oneri.plate).includes(query)) {
     return 'Plaka'
   }
-  if (oneri.customer_phone && oneri.customer_phone.toLowerCase().includes(query)) {
+  if (sadelestir(oneri.customer_phone).includes(query)) {
     return 'Telefon'
   }
   return 'Müşteri'

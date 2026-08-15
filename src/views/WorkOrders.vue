@@ -910,6 +910,20 @@ const isEmriLoglariGetir = async (workOrderId) => {
   }
 }
 
+// Katalog dışı parçada part_code/part_name boş kalır, adı description alanında durur
+const kalemAciklamasiGetir = (kalem) => {
+  const kod = String(kalem?.part_code || '').trim()
+  const parcaAdi = String(kalem?.part_name || '').trim()
+  const aciklama = String(kalem?.description || '').trim()
+
+  if (kalem?.type !== 'Parça') return aciklama || '-'
+
+  const ad = parcaAdi || aciklama
+  if (kod && ad) return `${kod} - ${ad}`
+
+  return ad || kod || '-'
+}
+
 const parcaSecildi = (partId) => {
   const parca = parcalarListesi.value.find(p => p.id === partId)
 
@@ -1931,12 +1945,7 @@ onUnmounted(() => {
 
             <Column header="Açıklama">
               <template #body="slotProps">
-                <span v-if="slotProps.data.type === 'Parça'">
-                  {{ slotProps.data.part_code }} - {{ slotProps.data.part_name }}
-                </span>
-                <span v-else>
-                  {{ slotProps.data.description }}
-                </span>
+                {{ kalemAciklamasiGetir(slotProps.data) }}
               </template>
             </Column>
 
