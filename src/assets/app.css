@@ -820,3 +820,120 @@ html[data-theme="light"] .p-tag.p-tag-warning { color: #b45309 !important; }
 html[data-theme="light"] .p-tag.p-tag-danger  { color: #b91c1c !important; }
 html[data-theme="light"] .p-tag.p-tag-info    { color: #0369a1 !important; }
 
+/* ──────────────────────────────────────────────────────────────────────────
+   Chromium 108 (Electron 22 / Windows 7 sürümü) color-mix() geri düşüşü
+
+   PrimeVue'nun Aura teması toast, message, tag, buton ve seçim vurgusu
+   arka planlarını color-mix() ile veriyor. color-mix() Chrome 111'de geldi;
+   32-bit sürümün taşıdığı Chromium 108 bunu tanımıyor. Tanınmayan değer
+   değişken yerine konduğunda bildirim geçersiz sayılıyor ve background
+   başlangıç değerine, yani SAYDAM'a düşüyor — bildirim kutuları ve durum
+   etiketleri şeffaf görünüyordu.
+
+   Aşağıdaki değerler tahmin değil: color-mix(in srgb, C, transparent P%)
+   tam olarak C'nin alfası (100-P)/100 olmuş hâlidir; hepsi temanın kendi
+   token'larından üretildi. Yani 64-bit sürümdeki görünümün birebir aynısı.
+
+   @supports bloğu color-mix() destekleyen motorlarda hiç çalışmaz, bu yüzden
+   64-bit sürüm bundan etkilenmez ve iki dalın kaynağı aynı kalabilir.
+   Seçici iki kez yazıldı (:root:root): tema CSS'i çalışma anında sonradan
+   enjekte edildiği için eşit özgüllükte kaybederdik.
+   ────────────────────────────────────────────────────────────────────────── */
+@supports not (background: color-mix(in srgb, red, transparent 50%)) {
+  :root:root {
+  --p-inlinemessage-error-background: rgba(254, 242, 242, 0.95);
+  --p-inlinemessage-error-shadow: 0px 4px 8px 0px rgba(239, 68, 68, 0.04);
+  --p-inlinemessage-info-background: rgba(239, 246, 255, 0.95);
+  --p-inlinemessage-info-shadow: 0px 4px 8px 0px rgba(59, 130, 246, 0.04);
+  --p-inlinemessage-success-background: rgba(240, 253, 244, 0.95);
+  --p-inlinemessage-success-shadow: 0px 4px 8px 0px rgba(34, 197, 94, 0.04);
+  --p-inlinemessage-warn-background: rgba(254, 252, 232, 0.95);
+  --p-inlinemessage-warn-shadow: 0px 4px 8px 0px rgba(234, 179, 8, 0.04);
+  --p-message-error-background: rgba(254, 242, 242, 0.95);
+  --p-message-error-shadow: 0px 4px 8px 0px rgba(239, 68, 68, 0.04);
+  --p-message-info-background: rgba(239, 246, 255, 0.95);
+  --p-message-info-shadow: 0px 4px 8px 0px rgba(59, 130, 246, 0.04);
+  --p-message-success-background: rgba(240, 253, 244, 0.95);
+  --p-message-success-shadow: 0px 4px 8px 0px rgba(34, 197, 94, 0.04);
+  --p-message-warn-background: rgba(254, 252, 232, 0.95);
+  --p-message-warn-shadow: 0px 4px 8px 0px rgba(234, 179, 8, 0.04);
+  --p-toast-error-background: rgba(254, 242, 242, 0.95);
+  --p-toast-error-shadow: 0px 4px 8px 0px rgba(239, 68, 68, 0.04);
+  --p-toast-info-background: rgba(239, 246, 255, 0.95);
+  --p-toast-info-shadow: 0px 4px 8px 0px rgba(59, 130, 246, 0.04);
+  --p-toast-success-background: rgba(240, 253, 244, 0.95);
+  --p-toast-success-shadow: 0px 4px 8px 0px rgba(34, 197, 94, 0.04);
+  --p-toast-warn-background: rgba(254, 252, 232, 0.95);
+  --p-toast-warn-shadow: 0px 4px 8px 0px rgba(234, 179, 8, 0.04);
+  }
+
+  html[data-theme="dark"]:root {
+  --p-button-outlined-danger-active-background: rgba(248, 113, 113, 0.16);
+  --p-button-outlined-danger-hover-background: rgba(248, 113, 113, 0.04);
+  --p-button-outlined-help-active-background: rgba(192, 132, 252, 0.16);
+  --p-button-outlined-help-hover-background: rgba(192, 132, 252, 0.04);
+  --p-button-outlined-info-active-background: rgba(56, 189, 248, 0.16);
+  --p-button-outlined-info-hover-background: rgba(56, 189, 248, 0.04);
+  --p-button-outlined-primary-active-background: rgba(16, 185, 129, 0.16);
+  --p-button-outlined-primary-hover-background: rgba(16, 185, 129, 0.04);
+  --p-button-outlined-success-active-background: rgba(74, 222, 128, 0.16);
+  --p-button-outlined-success-hover-background: rgba(74, 222, 128, 0.04);
+  --p-button-outlined-warn-active-background: rgba(251, 146, 60, 0.16);
+  --p-button-outlined-warn-hover-background: rgba(251, 146, 60, 0.04);
+  --p-button-text-danger-active-background: rgba(248, 113, 113, 0.16);
+  --p-button-text-danger-hover-background: rgba(248, 113, 113, 0.04);
+  --p-button-text-help-active-background: rgba(192, 132, 252, 0.16);
+  --p-button-text-help-hover-background: rgba(192, 132, 252, 0.04);
+  --p-button-text-info-active-background: rgba(56, 189, 248, 0.16);
+  --p-button-text-info-hover-background: rgba(56, 189, 248, 0.04);
+  --p-button-text-primary-active-background: rgba(16, 185, 129, 0.16);
+  --p-button-text-primary-hover-background: rgba(16, 185, 129, 0.04);
+  --p-button-text-success-active-background: rgba(74, 222, 128, 0.16);
+  --p-button-text-success-hover-background: rgba(74, 222, 128, 0.04);
+  --p-button-text-warn-active-background: rgba(251, 146, 60, 0.16);
+  --p-button-text-warn-hover-background: rgba(251, 146, 60, 0.04);
+  --p-highlight-background: rgba(52, 211, 153, 0.16);
+  --p-highlight-focus-background: rgba(52, 211, 153, 0.24);
+  --p-inlinemessage-error-background: rgba(239, 68, 68, 0.16);
+  --p-inlinemessage-error-border-color: rgba(185, 28, 28, 0.36);
+  --p-inlinemessage-error-shadow: 0px 4px 8px 0px rgba(239, 68, 68, 0.04);
+  --p-inlinemessage-info-background: rgba(59, 130, 246, 0.16);
+  --p-inlinemessage-info-border-color: rgba(29, 78, 216, 0.36);
+  --p-inlinemessage-info-shadow: 0px 4px 8px 0px rgba(59, 130, 246, 0.04);
+  --p-inlinemessage-success-background: rgba(34, 197, 94, 0.16);
+  --p-inlinemessage-success-border-color: rgba(21, 128, 61, 0.36);
+  --p-inlinemessage-success-shadow: 0px 4px 8px 0px rgba(34, 197, 94, 0.04);
+  --p-inlinemessage-warn-background: rgba(234, 179, 8, 0.16);
+  --p-inlinemessage-warn-border-color: rgba(161, 98, 7, 0.36);
+  --p-inlinemessage-warn-shadow: 0px 4px 8px 0px rgba(234, 179, 8, 0.04);
+  --p-message-error-background: rgba(239, 68, 68, 0.16);
+  --p-message-error-border-color: rgba(185, 28, 28, 0.36);
+  --p-message-error-shadow: 0px 4px 8px 0px rgba(239, 68, 68, 0.04);
+  --p-message-info-background: rgba(59, 130, 246, 0.16);
+  --p-message-info-border-color: rgba(29, 78, 216, 0.36);
+  --p-message-info-shadow: 0px 4px 8px 0px rgba(59, 130, 246, 0.04);
+  --p-message-success-background: rgba(34, 197, 94, 0.16);
+  --p-message-success-border-color: rgba(21, 128, 61, 0.36);
+  --p-message-success-shadow: 0px 4px 8px 0px rgba(34, 197, 94, 0.04);
+  --p-message-warn-background: rgba(234, 179, 8, 0.16);
+  --p-message-warn-border-color: rgba(161, 98, 7, 0.36);
+  --p-message-warn-shadow: 0px 4px 8px 0px rgba(234, 179, 8, 0.04);
+  --p-tag-danger-background: rgba(239, 68, 68, 0.16);
+  --p-tag-info-background: rgba(14, 165, 233, 0.16);
+  --p-tag-primary-background: rgba(16, 185, 129, 0.16);
+  --p-tag-success-background: rgba(34, 197, 94, 0.16);
+  --p-tag-warn-background: rgba(249, 115, 22, 0.16);
+  --p-toast-error-background: rgba(239, 68, 68, 0.16);
+  --p-toast-error-border-color: rgba(185, 28, 28, 0.36);
+  --p-toast-error-shadow: 0px 4px 8px 0px rgba(239, 68, 68, 0.04);
+  --p-toast-info-background: rgba(59, 130, 246, 0.16);
+  --p-toast-info-border-color: rgba(29, 78, 216, 0.36);
+  --p-toast-info-shadow: 0px 4px 8px 0px rgba(59, 130, 246, 0.04);
+  --p-toast-success-background: rgba(34, 197, 94, 0.16);
+  --p-toast-success-border-color: rgba(21, 128, 61, 0.36);
+  --p-toast-success-shadow: 0px 4px 8px 0px rgba(34, 197, 94, 0.04);
+  --p-toast-warn-background: rgba(234, 179, 8, 0.16);
+  --p-toast-warn-border-color: rgba(161, 98, 7, 0.36);
+  --p-toast-warn-shadow: 0px 4px 8px 0px rgba(234, 179, 8, 0.04);
+  }
+}

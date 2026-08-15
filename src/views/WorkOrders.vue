@@ -593,6 +593,34 @@ const fotografKategorisiFiltre = ref('tumu')
 const fotograflarYukleniyor = ref(false)
 const seciliFotografModal = ref(null)
 
+// Kategoriler sabit bir liste değil, kullanıcının kendi yazdığı serbest metin.
+// Daha önce kullanılanlar bütün iş emirlerinden toplanıp öneri olarak sunuluyor.
+const kategoriOnerileri = ref([])
+const yeniFotografKategorisi = ref('')
+
+const kategoriOnerileriniYukle = async () => {
+  if (!window.api?.fotografKategorileriGetir) return
+  try {
+    const res = await window.api.fotografKategorileriGetir()
+    kategoriOnerileri.value = res?.success && Array.isArray(res.kategoriler) ? res.kategoriler : []
+  } catch (err) {
+    console.error('Fotoğraf kategorileri yüklenemedi:', err)
+    kategoriOnerileri.value = []
+  }
+}
+
+// Filtre şeritleri bu iş emrinde gerçekten kullanılmış kategorilerden üretiliyor
+const mevcutFotografKategorileri = computed(() => {
+  const gorulen = new Map()
+  for (const foto of fotograflar.value) {
+    const ad = String(foto?.category || '').trim()
+    if (!ad) continue
+    const anahtar = ad.toLocaleLowerCase('tr')
+    if (!gorulen.has(anahtar)) gorulen.set(anahtar, ad)
+  }
+  return [...gorulen.values()].sort((a, b) => a.localeCompare(b, 'tr'))
+})
+
 const fotograflariYukle = async (workOrderId) => {
   if (!workOrderId || !window.api?.isEmriFotograflariGetir) {
     fotograflar.value = []
@@ -601,10 +629,15 @@ const fotograflariYukle = async (workOrderId) => {
   fotograflarYukleniyor.value = true
   try {
     const res = await window.api.isEmriFotograflariGetir(workOrderId)
-    if (res?.success) {
-      fotograflar.value = res.fotograflar || []
-    } else {
-      fotograflar.value = []
+    fotograflar.value = res?.success ? res.fotograflar || [] : []
+
+    // Kategoriler serbest metin olduğu için seçili filtre silinmiş/yeniden
+    // adlandırılmış olabilir; öyleyse boş liste göstermek yerine "Tümü"ye dönülür.
+    if (
+      fotografKategorisiFiltre.value !== 'tumu' &&
+      !mevcutFotografKategorileri.value.includes(fotografKategorisiFiltre.value)
+    ) {
+      fotografKategorisiFiltre.value = 'tumu'
     }
   } catch (err) {
     console.error('Fotoğraflar yüklenemedi:', err)
@@ -618,13 +651,20 @@ const fotografYukleModalAc = async () => {
   if (ustaIsiEngelli('Fotoğraf ekleme')) return
   if (!seciliIsEmri.value?.id || !window.api?.isEmriFotografYukleDialog) return
   try {
+    // Kategori kutusu boş bırakıldıysa aktif filtreye, o da "tümü" ise genel bir ada düşülür
+    const yazilan = String(yeniFotografKategorisi.value || '').trim()
+    const kategori =
+      yazilan ||
+      (fotografKategorisiFiltre.value !== 'tumu' ? fotografKategorisiFiltre.value : 'Araç Kabul')
+
     const res = await window.api.isEmriFotografYukleDialog({
       work_order_id: seciliIsEmri.value.id,
-      category: fotografKategorisiFiltre.value === 'tumu' ? 'Araç Kabul' : fotografKategorisiFiltre.value
+      category: kategori
     })
     if (res?.success) {
-      basariMesaji(`${res.count || 1} adet fotoğraf yüklendi.`)
+      basariMesaji(`${res.count || 1} adet fotoğraf "${kategori}" kategorisine yüklendi.`)
       fotograflariYukle(seciliIsEmri.value.id)
+      kategoriOnerileriniYukle()
     } else if (res?.error) {
       hataMesaji(res.error)
     }
@@ -665,6 +705,7 @@ const fotografGuncelle = async () => {
     if (res?.success) {
       basariMesaji('Fotoğraf notu ve kategorisi güncellendi.')
       fotograflariYukle(seciliIsEmri.value.id)
+      kategoriOnerileriniYukle()
     } else {
       hataMesaji(res?.error || 'Güncellenemedi.')
     }
@@ -1226,6 +1267,7 @@ onMounted(async () => {
   }
 
   listeleriGetir()
+  kategoriOnerileriniYukle()
   window.addEventListener('app-data-refreshed', verileriYenileDetayli)
 })
 
@@ -2128,22 +2170,33 @@ onUnmounted(() => {
                 Araç kabulünde çekilen fotoğraflar, çizik/hasar görselleri ve sökülen parça fotoğrafları.
               </p>
             </div>
-            <Button
-              label="Fotoğraf Ekle"
-              icon="pi pi-plus"
-              severity="primary"
-              size="small"
-              :disabled="destekModu"
-              @click="fotografYukleModalAc"
-            />
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <Dropdown
+                v-model="yeniFotografKategorisi"
+                :options="kategoriOnerileri"
+                editable
+                placeholder="Kategori yazın (örn: Motor Bölümü)"
+                :disabled="destekModu"
+                style="width: 250px;"
+                title="Eklenecek fotoğrafların kategorisi. İstediğiniz adı yazabilir veya daha önce kullandıklarınızdan seçebilirsiniz."
+              />
+              <Button
+                label="Fotoğraf Ekle"
+                icon="pi pi-plus"
+                severity="primary"
+                size="small"
+                :disabled="destekModu"
+                @click="fotografYukleModalAc"
+              />
+            </div>
           </div>
 
-          <!-- Kategori Filtreleri -->
+          <!-- Kategori Filtreleri: bu iş emrinde gerçekten kullanılmış kategoriler -->
           <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px;">
             <Button
-              v-for="cat in ['tumu', 'Araç Kabul', 'Hasar / Çizik', 'Sökülen Parça', 'Tamir Sonrası']"
+              v-for="cat in ['tumu', ...mevcutFotografKategorileri]"
               :key="cat"
-              :label="cat === 'tumu' ? `Tümü (${fotograflar.length})` : cat"
+              :label="cat === 'tumu' ? `Tümü (${fotograflar.length})` : `${cat} (${fotograflar.filter(f => f.category === cat).length})`"
               size="small"
               :severity="fotografKategorisiFiltre === cat ? 'info' : 'secondary'"
               :text="fotografKategorisiFiltre !== cat"
@@ -2195,7 +2248,9 @@ onUnmounted(() => {
                 <label>Kategori</label>
                 <Dropdown
                   v-model="seciliFotografModal.category"
-                  :options="['Araç Kabul', 'Hasar / Çizik', 'Sökülen Parça', 'Tamir Sonrası']"
+                  :options="kategoriOnerileri"
+                  editable
+                  placeholder="Kategori yazın"
                   style="width: 100%;"
                 />
               </div>

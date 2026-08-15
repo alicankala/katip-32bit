@@ -143,6 +143,7 @@ karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
 
   // Araç Fotoğrafları
   isEmriFotograflariGetir: (workOrderId) => ipcRenderer.invoke('is-emri-fotograflari-getir', workOrderId),
+  fotografKategorileriGetir: () => ipcRenderer.invoke('fotograf-kategorileri-getir'),
   isEmriFotografYukleDialog: (veri) => ipcRenderer.invoke('is-emri-fotograf-yukle-dialog', veri),
   isEmriFotografSil: (photoId) => ipcRenderer.invoke('is-emri-fotograf-sil', photoId),
   isEmriFotografGuncelle: (veri) => ipcRenderer.invoke('is-emri-fotograf-guncelle', veri)

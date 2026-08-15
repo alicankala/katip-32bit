@@ -1463,6 +1463,24 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
     }
   })
 
+  // 20b. Fotoğraf kategorileri (serbest metin; daha önce kullanılanlar öneri olarak sunulur)
+  kanalEkle('fotograf-kategorileri-getir', () => {
+    try {
+      const satirlar = db.prepare(`
+        SELECT TRIM(category) AS kategori, COUNT(*) AS adet
+        FROM work_order_photos
+        WHERE category IS NOT NULL AND TRIM(category) <> ''
+        GROUP BY LOWER(TRIM(category))
+        ORDER BY adet DESC, kategori ASC
+      `).all() as any[]
+
+      return { success: true, kategoriler: satirlar.map((s) => s.kategori) }
+    } catch (error) {
+      console.error('Fotoğraf kategorileri getirme hatası:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
   // 21. İş Emri Fotoğraflarını Getir
   kanalEkle('is-emri-fotograflari-getir', async (_event, workOrderId: number) => {
     try {

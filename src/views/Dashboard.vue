@@ -140,8 +140,45 @@ const seciliAracWorkOrders = computed(() => {
   return seciliArac.value ? seciliArac.value.workOrders : []
 })
 
+// İş emri kalemleri ve fotoğrafları arama sorgusuyla birlikte gelmiyor; fotoğraflar
+// base64 gömülü döndüğü için tüm sonuçlar için peşin çekmek ağır olurdu. Bu yüzden
+// yalnızca seçilen aracın iş emirleri için, bir kez, istendiğinde yükleniyor.
+const woDetaylari = ref({})
+const detayYukleniyor = ref(false)
+
+const seciliAracDetaylariniYukle = async (arac) => {
+  const isEmirleri = arac?.workOrders || []
+  const eksikler = isEmirleri.filter((wo) => wo?.id && !woDetaylari.value[wo.id])
+  if (eksikler.length === 0) return
+
+  detayYukleniyor.value = true
+  try {
+    await Promise.all(
+      eksikler.map(async (wo) => {
+        try {
+          const [kalemRes, fotoRes] = await Promise.all([
+            window.api.isEmriKalemleriGetir(wo.id),
+            window.api.isEmriFotograflariGetir(wo.id)
+          ])
+
+          woDetaylari.value[wo.id] = {
+            kalemler: kalemRes?.success && Array.isArray(kalemRes.kalemler) ? kalemRes.kalemler : [],
+            fotograflar: fotoRes?.success && Array.isArray(fotoRes.fotograflar) ? fotoRes.fotograflar : []
+          }
+        } catch (e) {
+          console.error('İş emri detayı yüklenemedi:', wo.id, e)
+          woDetaylari.value[wo.id] = { kalemler: [], fotograflar: [] }
+        }
+      })
+    )
+  } finally {
+    detayYukleniyor.value = false
+  }
+}
+
 const detayGoster = (arac) => {
   seciliArac.value = arac
+  seciliAracDetaylariniYukle(arac)
 }
 
 const gecmisSorgula = async () => {
@@ -160,6 +197,7 @@ const gecmisSorgula = async () => {
         const uAraclar = benzersizAraclar.value
         if (uAraclar.length > 0) {
           seciliArac.value = uAraclar[0]
+          seciliAracDetaylariniYukle(uAraclar[0])
         } else {
           seciliArac.value = null
         }
@@ -185,6 +223,7 @@ const gecmisTemizle = () => {
   secereVerileri.value = []
   aramaSonuclariDialogAcik.value = false
   seciliArac.value = null
+  woDetaylari.value = {}
   oneriler.value = []
   onerilerAcik.value = false
 }
@@ -737,11 +776,11 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Kalemler -->
-                <div v-if="visit.kalemler && visit.kalemler.length > 0" class="visit-items-section">
+                <div v-if="woDetaylari[visit.id]?.kalemler?.length" class="visit-items-section">
                   <span style="font-weight: 700; color: var(--text-title); font-size: 12px; display: block; margin-bottom: 6px;">Kalemler:</span>
                   <div style="display: flex; flex-direction: column; gap: 4px;">
                     <div
-                      v-for="kalem in visit.kalemler"
+                      v-for="kalem in woDetaylari[visit.id].kalemler"
                       :key="kalem.id"
                       style="display: flex; justify-content: space-between; align-items: center; padding: 5px 8px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px;"
                     >
@@ -760,14 +799,18 @@ onUnmounted(() => {
                 </div>
 
                 <!-- Eklenen Araç Fotoğrafları Galeri -->
-                <div v-if="visit.fotograflar && visit.fotograflar.length > 0" class="visit-photos-section" style="margin-top: 6px;">
+                <div v-if="detayYukleniyor && !woDetaylari[visit.id]" style="font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+                  <i class="pi pi-spin pi-spinner" style="font-size: 11px;"></i> Kalemler ve fotoğraflar yükleniyor...
+                </div>
+
+                <div v-if="woDetaylari[visit.id]?.fotograflar?.length" class="visit-photos-section" style="margin-top: 6px;">
                   <span style="font-weight: 700; color: var(--text-title); font-size: 12px; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
                     <i class="pi pi-camera" style="color: var(--accent-color, #38bdf8);"></i>
-                    Fotoğraflar ({{ visit.fotograflar.length }})
+                    Fotoğraflar ({{ woDetaylari[visit.id].fotograflar.length }})
                   </span>
                   <div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;">
                     <div
-                      v-for="foto in visit.fotograflar"
+                      v-for="foto in woDetaylari[visit.id].fotograflar"
                       :key="foto.id"
                       style="position: relative; flex: 0 0 110px; height: 80px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-color); cursor: pointer;"
                       @click="dashSeciliFotograf = foto"
