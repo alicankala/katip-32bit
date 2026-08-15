@@ -1,13 +1,10 @@
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
 import { createRequire } from 'node:module'
 import db, { dbPath, uygulamaVerileriniYenileBackend, ayarlariGetirBackend } from '../database.js'
 import { app, BrowserWindow, dialog, shell } from 'electron'
 import fsSync, { promises as fs } from 'node:fs'
 import path from 'node:path'
+import AdmZip from 'adm-zip'
 import { isRestoreInProgress, setRestoreInProgress } from '../restoreState.js'
-
-const execFileAsync = promisify(execFile)
 
 // better-sqlite3 doğrudan ESM import ile yüklenirse Vite'in derlediği main
 // paketinde native modülün __filename/__dirname'e dayanan yükleme mantığı
@@ -127,15 +124,26 @@ async function zipArsiviOlustur(
     await fs.mkdir(path.dirname(zipPath), { recursive: true })
     await fs.rm(zipPath, { force: true })
 
-    // Windows'un yerleşik tar.exe'si (bsdtar), '-f' değerindeki ilk ':' karakterini
-    // gördüğünde bunu uzak arşiv sözdizimi ("host:dosya") sanıp sürücü harfini
-    // hostname olarak çözmeye çalışıyor ("Cannot connect to C: resolve failed").
-    // Bunu önlemek için arşiv klasörüne geçip -f değerini göreli dosya adıyla veriyoruz.
-    await execFileAsync(
-      'tar.exe',
-      ['-a', '-c', '-f', path.basename(zipPath), '-C', packageRoot, 'database', 'fotograflar', 'manifest.json'],
-      { windowsHide: true, maxBuffer: 50 * 1024 * 1024, cwd: path.dirname(zipPath) }
-    )
+    // Arşivleme bilerek adm-zip (saf JavaScript) ile yapılıyor, Windows'un
+    // tar.exe'si ile DEĞİL: tar.exe Windows'a ancak Windows 10 build 17063 ile
+    // geldi, Windows 7'de yok. tar.exe kullanıldığında Windows 7'de yedekleme,
+    // geri yükleme ve (önce güvenlik yedeği aldığı için) sıfırlama sessizce
+    // başarısız oluyordu. İşletim sistemine bağımlı bir araç kullanmayın.
+    const zip = new AdmZip()
+    zip.addLocalFolder(databaseDir, 'database')
+
+    // Boş klasörleri addLocalFolder atlıyor; geri yükleme 'fotograflar'
+    // klasörünü beklediği için boşsa açık bir klasör girdisi ekleniyor
+    // (tar.exe'nin ürettiği yapı da böyleydi).
+    const fotografDosyalari = await fs.readdir(packagePhotosDir)
+    if (fotografDosyalari.length > 0) {
+      zip.addLocalFolder(packagePhotosDir, 'fotograflar')
+    } else {
+      zip.addFile('fotograflar/', Buffer.alloc(0))
+    }
+
+    zip.addLocalFile(path.join(packageRoot, 'manifest.json'))
+    await zip.writeZipPromise(zipPath)
   } finally {
     await fs.rm(packageRoot, { recursive: true, force: true })
   }
@@ -243,19 +251,13 @@ export async function sonOtomatikYedekZamaniGetir(): Promise<number> {
 }
 
 async function zipPaketiniGuvenliCikart(zipPath: string, targetDir: string): Promise<void> {
-  // bsdtar '-f' değerindeki ':' karakterini uzak arşiv sözdizimi sanabildiği için
-  // (bkz. zipArsiviOlustur), burada da arşiv klasörüne geçip göreli ad kullanıyoruz.
-  const { stdout } = await execFileAsync(
-    'tar.exe',
-    ['-tf', path.basename(zipPath)],
-    { windowsHide: true, maxBuffer: 50 * 1024 * 1024, cwd: path.dirname(zipPath) }
-  )
-
+  // Çıkarma da adm-zip ile yapılıyor; gerekçesi zipArsiviOlustur'daki notta:
+  // tar.exe Windows 7'de yok. Yol doğrulaması (zip slip koruması) korunuyor.
+  const zip = new AdmZip(zipPath)
   const root = path.resolve(targetDir)
-  const entries = String(stdout || '').split(/\r?\n/).filter(Boolean)
 
-  for (const rawEntry of entries) {
-    const normalizedEntryPath = String(rawEntry || '').replace(/\\/g, '/')
+  for (const entry of zip.getEntries()) {
+    const normalizedEntryPath = String(entry.entryName || '').replace(/\\/g, '/')
     const parts = normalizedEntryPath.split('/').filter(Boolean)
 
     if (!normalizedEntryPath || normalizedEntryPath.startsWith('/') ||
@@ -270,11 +272,7 @@ async function zipPaketiniGuvenliCikart(zipPath: string, targetDir: string): Pro
   }
 
   await fs.mkdir(targetDir, { recursive: true })
-  await execFileAsync(
-    'tar.exe',
-    ['-xf', path.basename(zipPath), '-C', targetDir],
-    { windowsHide: true, maxBuffer: 50 * 1024 * 1024, cwd: path.dirname(zipPath) }
-  )
+  zip.extractAllTo(targetDir, true)
 }
 
 export async function otomatikYedekAlBackend(): Promise<TamYedekSonucu> {

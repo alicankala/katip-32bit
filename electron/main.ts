@@ -166,19 +166,62 @@ const AG_HATA_IMZALARI = [
   'network is unreachable'
 ]
 
+// Windows 7'nin kök sertifika deposu 2020'den beri güncellenmiyor. GitHub'ın
+// sertifikaları güncel köklere (ISRG Root X1, Sectigo/USERTrust) dayandığı için
+// eksik kök sertifikalı makinelerde bağlantı sertifika hatasıyla reddedilebiliyor.
+// Bu ayrı bir kategori: kullanıcıya "internet yok" demek yanıltıcı olur.
+const SERTIFIKA_HATA_IMZALARI = [
+  'err_cert',
+  'cert_authority_invalid',
+  'cert_date_invalid',
+  'cert_common_name_invalid',
+  'unable_to_verify_leaf_signature',
+  'unable_to_get_issuer_cert',
+  'self_signed_cert',
+  'depth_zero_self_signed',
+  'cert_has_expired',
+  'certificate verify failed'
+]
+
+// Ham hatadan teknik kodu ayıklar (ERR_CERT_AUTHORITY_INVALID, ENOTFOUND gibi).
+// Destek sırasında sebebin log dosyası açmadan görülebilmesi için mesaja ekleniyor.
+function hataKoduCikar(error: unknown): string {
+  const parcalar: string[] = []
+  if (error instanceof Error) {
+    parcalar.push(error.message)
+    const kod = (error as { code?: unknown }).code
+    if (kod) parcalar.push(String(kod))
+  } else {
+    parcalar.push(String(error))
+  }
+
+  const eslesme = parcalar.join(' ').match(/\b(ERR_[A-Z0-9_]+|E[A-Z]{3,})\b/)
+  return eslesme ? eslesme[1] : ''
+}
+
 function guncellemeHatasiniCevir(error: unknown): { mesaj: string; internetYok: boolean } {
   const ham = error instanceof Error ? `${error.message} ${error.stack || ''}` : String(error)
   const kucuk = ham.toLowerCase()
+  const kod = hataKoduCikar(error)
+  const kodEki = kod ? ` (kod: ${kod})` : ''
+
+  if (SERTIFIKA_HATA_IMZALARI.some((imza) => kucuk.includes(imza))) {
+    return {
+      mesaj: 'Güvenlik sertifikası doğrulanamadı. Bilgisayarın tarih/saati yanlış olabilir ' +
+        'veya Windows kök sertifikaları eksik olabilir.' + kodEki,
+      internetYok: false
+    }
+  }
 
   if (AG_HATA_IMZALARI.some((imza) => kucuk.includes(imza))) {
     return {
-      mesaj: 'İnternet bağlantısı yok. Güncelleme denetlenemedi; bağlanınca kendiliğinden denenecek.',
+      mesaj: 'İnternet bağlantısı yok. Güncelleme denetlenemedi; bağlanınca kendiliğinden denenecek.' + kodEki,
       internetYok: true
     }
   }
 
   return {
-    mesaj: 'Güncelleme sunucusuna şu an ulaşılamıyor. Daha sonra tekrar denenecek.',
+    mesaj: 'Güncelleme sunucusuna şu an ulaşılamıyor. Daha sonra tekrar denenecek.' + kodEki,
     internetYok: false
   }
 }
