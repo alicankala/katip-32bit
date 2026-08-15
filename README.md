@@ -1,3 +1,9 @@
+# Kâtip (32-bit / x86 Windows sürümü)
+
+Bu repo, [alicankala/katip](https://github.com/alicankala/katip) 64-bit projesinin 32-bit (x86) Windows kurulum dosyası üretmek için ayrılmış koludur. `electron-builder.json5` burada yalnızca `ia32` hedefler ve kendi GitHub release/otomatik güncelleme kanalını kullanır, böylece 64-bit sürümle karışmaz. Kaynak kod aksi belirtilmedikçe ana repoyla birebir aynıdır.
+
+---
+
 # Vue 3 + TypeScript + Vite
 
 This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.

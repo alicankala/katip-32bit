@@ -23,7 +23,7 @@
   "publish": {
     "provider": "github",
     "owner": "alicankala",
-    "repo": "katip"
+    "repo": "katip-x86"
   },
 
 "win": {
@@ -32,7 +32,7 @@
     {
       "target": "nsis",
       "arch": [
-        "x64"
+        "ia32"
       ]
     }
   ],
@@ -40,7 +40,8 @@
   // latest.yml'ye guvenli (ASCII) bir ad yaziyor, uretilen dosya ise ${productName}
   // ile adlandiriliyordu. Ikisi tutmayinca guncelleyici dosyayi bulamayip
   // sessizce basarisiz oluyordu. productName degismiyor, yalnizca dosya adi.
-  "artifactName": "Katip-Windows-${version}-Setup.${ext}"
+  // "-x86" eki 64-bit repodaki (katip) kurulum dosyasiyla karismasin diye eklendi.
+  "artifactName": "Katip-Windows-x86-${version}-Setup.${ext}"
 },
   "nsis": {
     "oneClick": false,

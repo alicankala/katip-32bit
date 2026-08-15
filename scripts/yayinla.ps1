@@ -29,7 +29,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repo = 'alicankala/katip'
+$repo = 'alicankala/katip-x86'
 
 function Vazgec($mesaj) {
   Write-Host ""
