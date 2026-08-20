@@ -355,6 +355,11 @@ export function registerBackupHandlers(
     if (isRestoreInProgress()) {
       return { success: false, error: 'Zaten devam eden bir geri yükleme işlemi var.' }
     }
+    // db.close() çağrıldıktan sonra bir hata çıkarsa uygulama açık ama
+    // veritabanı kapalı kalıyordu: her ekran sessizce çalışmaz hâle geliyor,
+    // kullanıcıya da bir şey söylenmiyordu. Sıfırlama akışında olduğu gibi
+    // böyle bir durumda uygulama yeniden başlatılır.
+    let veritabaniKapatildi = false
     try {
       const win = getWin()
       if (!win) {
@@ -569,6 +574,7 @@ export function registerBackupHandlers(
       }
 
       db.close()
+      veritabaniKapatildi = true
 
       try { await fs.rm(dbPath + '-wal', { force: true }) } catch {}
       try { await fs.rm(dbPath + '-shm', { force: true }) } catch {}
@@ -590,8 +596,13 @@ export function registerBackupHandlers(
 
       await restoreSonrasiOnar()
 
-      console.log('[Restore] Geri yükleme tamamlandı. Uygulama kapatılıyor...')
+      console.log('[Restore] Geri yükleme tamamlandı. Uygulama yeniden başlatılıyor...')
 
+      // Sıfırlama akışıyla aynı davranış: eskiden burada yalnızca app.exit(0)
+      // çağrılıyordu; arayüz "başarıyla geri yüklendi" yazıp uygulama hiçbir
+      // uyarı olmadan kapanıyor, kullanıcının programı elle açması gerekiyordu.
+      // Zaten restartRequired: true dönüyoruz.
+      app.relaunch()
       setTimeout(() => {
         app.exit(0)
       }, 1200)
@@ -604,6 +615,24 @@ export function registerBackupHandlers(
       }
     } catch (error) {
       console.error('Yedekten geri yükleme hatası:', error)
+
+      if (veritabaniKapatildi) {
+        // Bağlantı kapandıktan sonra kalınan bir hatada güvenli devam mümkün
+        // değil; uygulama yeniden başlatılır ve açılışta kendini toparlar.
+        // Güvenlik yedeği zaten alınmış durumda (guvenlikDir).
+        console.error('[Restore] Veritabanı kapalı durumda kalındı, uygulama yeniden başlatılıyor.')
+        app.relaunch()
+        setTimeout(() => {
+          app.exit(0)
+        }, 1200)
+
+        return {
+          success: false,
+          error: getErrorMessage(error) + ' (Uygulama yeniden başlatılacak.)',
+          restartRequired: true
+        }
+      }
+
       return { success: false, error: getErrorMessage(error) }
     } finally {
       setRestoreInProgress(false)
