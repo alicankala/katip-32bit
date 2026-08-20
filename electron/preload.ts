@@ -69,7 +69,7 @@ isEmriTamamlaVeOdemeKaydet: (veri) => ipcRenderer.invoke('is-emri-tamamla-ve-ode
 // İstatistikler / Geçmiş (Ana Panel)
 istatistikleriGetir: () => ipcRenderer.invoke('istatistikleri-getir'),
 musteriGecmisiGetir: (id) => ipcRenderer.invoke('musteri-gecmisi-getir', id),
-servisGecmisiAra: (aramaMetni) => ipcRenderer.invoke('servis-gecmisi-ara', aramaMetni),
+servisGecmisiAra: (aramaMetni, limit?: number) => ipcRenderer.invoke('servis-gecmisi-ara', aramaMetni, limit),
 karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
   
   // Veritabanı

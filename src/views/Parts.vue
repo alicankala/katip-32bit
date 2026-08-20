@@ -436,10 +436,15 @@ onUnmounted(() => {
         </div>
       </div>
 
+      <!-- alwaysShowPaginator=false: liste tek sayfaya sığıyorsa sayfalama
+           çubuğu görünmez, yani az kayıtlı kurulumlarda görüntü değişmez. -->
       <DataTable
         :value="filtrelenmisParcalar"
         :loading="yukleniyor"
         responsiveLayout="scroll"
+        paginator
+        :rows="50"
+        :alwaysShowPaginator="false"
         :rowClass="(row) => Number(row.stock || 0) <= 0 ? 'row-critical' : (row.critical_stock_enabled !== 0 && Number(row.stock || 0) <= Number(row.critical_stock ?? 5) ? 'row-critical' : '')"
       >
         <template #empty>

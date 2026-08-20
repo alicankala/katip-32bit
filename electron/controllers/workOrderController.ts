@@ -1,10 +1,12 @@
 import db from '../database.js'
 import { stokHareketiKaydet } from './partController.js'
-import { app, dialog, nativeImage } from 'electron'
+import { app, dialog } from 'electron'
 import fsSync, { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { resolveActiveMasterId } from '../session.js'
 import { kapaliGunKontrol, bugununTarihi } from './closingController.js'
+import { fotografAdresi } from '../photoProtocol.js'
+import { fotografiYoldanKucult } from '../photoUtils.js'
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
@@ -1250,7 +1252,10 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
         LEFT JOIN masters opened_master ON work_orders.opened_by_master_id = opened_master.id
         LEFT JOIN masters closed_master ON work_orders.closed_by_master_id = closed_master.id
         LEFT JOIN work_order_items ON work_order_items.work_order_id = work_orders.id
-        LEFT JOIN parts ON work_order_items.part_id = parts.id
+        -- LEFT JOIN parts kaldırıldı: parts hiçbir SELECT/WHERE/GROUP BY
+        -- ifadesinde kullanılmıyordu. part_id birincil anahtara bağlandığı için
+        -- en fazla bir satır eşleşiyordu, yani satır çoğaltmıyor ve toplamları
+        -- etkilemiyordu; sadece boşuna maliyetti.
 
         GROUP BY work_orders.id
         ORDER BY work_orders.id DESC
@@ -1384,9 +1389,15 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
   })
 
   // 20. Servis geçmişi ara
-  kanalEkle('servis-gecmisi-ara', (_event, aramaMetni: any) => {
+  // limit: yalnızca ana paneldeki arama kutusunun altında açılan öneri listesi
+  // için verilir; o liste sonucun ilk birkaç aracını gösterdiği hâlde eskiden
+  // eşleşen TÜM iş emirleri her tuş vuruşunda çekiliyordu. Limit verilmezse
+  // (tam arama diyaloğu) davranış eskisiyle birebir aynı: sınır yok.
+  kanalEkle('servis-gecmisi-ara', (_event, aramaMetni: any, limit?: any) => {
     try {
       const arama = String(aramaMetni || '').trim()
+      // SQLite'ta negatif LIMIT "sınır yok" demektir.
+      const satirSiniri = Number(limit) > 0 ? Math.floor(Number(limit)) : -1
 
       const normalizeString = (str: string) => {
         if (str === null || str === undefined) return ''
@@ -1451,9 +1462,11 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
               AND normalize_text(work_order_items.description) LIKE :arama
           )
         ORDER BY work_orders.id DESC
+        LIMIT :limit
       `).all({
         arama: temizAramaLike,
-        bosluksuz: bosluksuzArama
+        bosluksuz: bosluksuzArama,
+        limit: satirSiniri
       })
 
       return { success: true, gecmis }
@@ -1495,12 +1508,15 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
 
       const fotograflar: any[] = []
       for (const row of rows) {
+        // Eskiden dosyanın tamamı okunup base64 olarak IPC'ye konuyordu; artık
+        // yalnızca "dosya duruyor mu" diye bakılıp katip-foto:// adresi
+        // veriliyor, baytları <img> göründükçe protokol servis ediyor
+        // (bkz. electron/photoProtocol.ts). Okunamayan dosyada url yine boş
+        // kalır, arayüz o kaydı eskisi gibi görmezden gelir.
         let url = ''
         try {
-          const fileData = await fs.readFile(row.file_path)
-          const ext = path.extname(row.file_path).toLowerCase().replace('.', '') || 'jpeg'
-          const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
-          url = `data:${mimeType};base64,${fileData.toString('base64')}`
+          await fs.access(row.file_path)
+          url = fotografAdresi(row.id)
         } catch (e) {
           console.warn('[Photos] Dosya okunamadı:', row.file_path, e)
         }
@@ -1552,19 +1568,17 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
         const targetPath = path.join(photoDir, targetFileName)
 
         try {
-          const img = nativeImage.createFromPath(srcPath)
-          const size = img.getSize()
-          let resized = img
-          const maxDim = 1280
-          if (size.width > maxDim || size.height > maxDim) {
-            if (size.width > size.height) {
-              resized = img.resize({ width: maxDim, quality: 'better' })
-            } else {
-              resized = img.resize({ height: maxDim, quality: 'better' })
-            }
+          // Küçültme mantığı mobil yükleme yoluyla ortak (bkz. photoUtils.ts).
+          // Görüntü çözülemezse null döner ve dosya olduğu gibi kopyalanır;
+          // eskiden bu durumda toJPEG boş buffer döndürüp 0 baytlık bozuk bir
+          // dosya yazılıyordu (hata fırlatmadığı için kopyalama yedeği de
+          // devreye girmiyordu).
+          const kucultulmus = fotografiYoldanKucult(srcPath)
+          if (kucultulmus) {
+            await fs.writeFile(targetPath, kucultulmus)
+          } else {
+            await fs.copyFile(srcPath, targetPath)
           }
-          const compressedBuffer = resized.toJPEG(75)
-          await fs.writeFile(targetPath, compressedBuffer)
         } catch (e) {
           await fs.copyFile(srcPath, targetPath)
         }

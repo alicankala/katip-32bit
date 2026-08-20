@@ -1,5 +1,6 @@
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
+import Paginator from 'primevue/paginator'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -277,10 +278,39 @@ return liste.filter(i =>
   (i.closed_by_master_name || '').toLowerCase().includes(aranan)
 )
 })
+// ── Sayfalama ───────────────────────────────────────────────────────────
+// Liste eskiden süzgeçten geçen TÜM iş emirlerini tek seferde ekrana basıyordu;
+// kayıt biriktikçe sayfa doğrusal olarak ağırlaşıyordu. Ekranda aynı anda en
+// fazla SAYFA_BOYUTU satır çizilir. Süzgeç/arama sonucu sayfa sayısından kısa
+// kalırsa boş sayfada kalınmasın diye başlangıç sıfırlanır.
+const SAYFA_BOYUTU = 50
+const sayfaBaslangici = ref(0)
+
+const sayfalanmisIsEmirleri = computed(() =>
+  filtrelenmisIsEmirleri.value.slice(sayfaBaslangici.value, sayfaBaslangici.value + SAYFA_BOYUTU)
+)
+
+watch(filtrelenmisIsEmirleri, (liste) => {
+  if (sayfaBaslangici.value >= liste.length) sayfaBaslangici.value = 0
+})
+
+// Şablondaki dört sekme etiketi bu sayıları kullanıyor. Eskiden her biri ayrı
+// bir filter() çalıştırıyordu, yani her yeniden çizimde liste üç kez baştan
+// taranıyordu. Artık tek geçişte sayılıp önbelleğe alınıyor; sonuçlar aynı.
+const durumSayilari = computed(() => {
+  const sayac = { 'Açık': 0, 'Beklemede': 0, 'Tamamlandı': 0 }
+
+  for (const isEmri of isEmirleri.value) {
+    if (isEmri.status in sayac) sayac[isEmri.status] += 1
+  }
+
+  return sayac
+})
+
 const durumSayisi = (durum) => {
   if (durum === 'Tümü') return isEmirleri.value.length
 
-  return isEmirleri.value.filter(i => i.status === durum).length
+  return durumSayilari.value[durum] ?? 0
 }
 const yeniIsEmriAc = () => {
   if (ustaIsiEngelli('İş emri açma')) return
@@ -619,6 +649,19 @@ const mevcutFotografKategorileri = computed(() => {
     if (!gorulen.has(anahtar)) gorulen.set(anahtar, ad)
   }
   return [...gorulen.values()].sort((a, b) => a.localeCompare(b, 'tr'))
+})
+
+// Kategori düğmelerindeki sayılar. Eskiden şablonda her düğme için ayrı bir
+// filter() çalışıyordu (kategori sayısı × fotoğraf sayısı kadar iş). Tek geçişte
+// sayılıyor; kategori eşleştirmesi eskisi gibi tam metin karşılaştırması.
+const fotografKategoriSayilari = computed(() => {
+  const sayac = {}
+  for (const foto of fotograflar.value) {
+    const ad = foto?.category
+    if (!ad) continue
+    sayac[ad] = (sayac[ad] || 0) + 1
+  }
+  return sayac
 })
 
 const fotograflariYukle = async (workOrderId) => {
@@ -1372,7 +1415,7 @@ onUnmounted(() => {
 
       <div v-else class="table-body-rows">
         <div
-          v-for="isEmri in filtrelenmisIsEmirleri"
+          v-for="isEmri in sayfalanmisIsEmirleri"
           :key="isEmri.id"
           class="work-order-table-row"
           :class="{ 'is-selected': seciliIsEmri?.id === isEmri.id }"
@@ -1491,6 +1534,18 @@ onUnmounted(() => {
           />
         </template>
       </div>
+
+      <!-- Liste tek sayfaya sığıyorsa sayfalama çubuğu hiç görünmez; yani az
+           kayıtlı kurulumlarda ekran görüntüsü eskisiyle birebir aynı kalır. -->
+      <Paginator
+        v-if="!yukleniyor && filtrelenmisIsEmirleri.length > SAYFA_BOYUTU"
+        v-model:first="sayfaBaslangici"
+        :rows="SAYFA_BOYUTU"
+        :totalRecords="filtrelenmisIsEmirleri.length"
+        template="FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink"
+        currentPageReportTemplate="{first}-{last} / {totalRecords}"
+        class="work-orders-paginator"
+      />
     </div>
 
     <div
@@ -2196,7 +2251,7 @@ onUnmounted(() => {
             <Button
               v-for="cat in ['tumu', ...mevcutFotografKategorileri]"
               :key="cat"
-              :label="cat === 'tumu' ? `Tümü (${fotograflar.length})` : `${cat} (${fotograflar.filter(f => f.category === cat).length})`"
+              :label="cat === 'tumu' ? `Tümü (${fotograflar.length})` : `${cat} (${fotografKategoriSayilari[cat] || 0})`"
               size="small"
               :severity="fotografKategorisiFiltre === cat ? 'info' : 'secondary'"
               :text="fotografKategorisiFiltre !== cat"

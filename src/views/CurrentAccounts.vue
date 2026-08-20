@@ -46,6 +46,15 @@ const giderler = ref([])
 const islemler = ref([])
 const odemeler = ref([])
 
+// Bu liste eskiden doğrudan şablonun içinde ([...islemler, ...odemeler].sort(...))
+// üretiliyordu. Orada üretilince her yeniden çizimde yeni bir dizi oluşup baştan
+// sıralanıyor, üstelik dizi kimliği değiştiği için DataTable listeyi hep sıfırdan
+// işliyordu. computed olarak yalnızca islemler/odemeler değişince hesaplanır.
+// Sıralama ölçütü aynen korundu (tarihe göre yeniden eskiye).
+const islemVeOdemeGecmisi = computed(() =>
+  [...islemler.value, ...odemeler.value].sort((a, b) => new Date(b.date) - new Date(a.date))
+)
+
 // Dialog Kontrolleri
 const cariDialogAcik = ref(false)
 const islemDialogAcik = ref(false)
@@ -1627,7 +1636,7 @@ onUnmounted(() => {
 
         <h4 style="margin: 0; font-size: 14px; color: var(--text-title, #fff);">İşlem ve Ödeme Geçmişi</h4>
         
-        <DataTable :value="[...islemler, ...odemeler].sort((a,b) => new Date(b.date) - new Date(a.date))" class="p-datatable-sm" paginator :rows="8">
+        <DataTable :value="islemVeOdemeGecmisi" class="p-datatable-sm" paginator :rows="8">
           <Column header="Tarih" style="width: 110px;">
             <template #body="slotProps">{{ tarihFormatla(slotProps.data.date) }}</template>
           </Column>

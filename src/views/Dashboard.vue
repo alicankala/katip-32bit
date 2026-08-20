@@ -270,7 +270,11 @@ const onerileriGetir = () => {
 
   debounceTimer = setTimeout(async () => {
     try {
-      const res = await window.api.servisGecmisiAra(query)
+      // Öneri listesi en fazla 6 araç gösteriyor (aşağıdaki slice). Her tuş
+      // vuruşunda eşleşen tüm iş emirlerini çekmeye gerek yok; en yeni 300 kayıt
+      // 6 farklı plakayı fazlasıyla kapsar. Enter ile yapılan tam arama
+      // (gecmisSorgula) sınırsız kalmaya devam ediyor.
+      const res = await window.api.servisGecmisiAra(query, 300)
       if (res?.success && Array.isArray(res.gecmis)) {
         const groups = {}
         res.gecmis.forEach(wo => {

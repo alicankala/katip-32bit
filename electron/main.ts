@@ -1,11 +1,12 @@
 import { initDB, ayarlariGetirBackend } from './database.js'
-import { app, BrowserWindow, ipcMain, Menu, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, Menu, shell, type IpcMainInvokeEvent } from 'electron'
 import path from 'node:path'
 import log from 'electron-log/main'
 import { autoUpdater } from 'electron-updater'
 import { NodeHttpExecutor } from './nodeHttpExecutor.js'
 import { runPhoneServerMigrations } from './phoneServer.js'
 import { isRestoreInProgress } from './restoreState.js'
+import { fotografSemasiniTanimla, fotografProtokolunuKaydet } from './photoProtocol.js'
 import { getActiveMasterSession } from './session.js'
 import { destekModundaYasakMi, DESTEK_ENGEL_MESAJI } from './permissions.js'
 
@@ -13,6 +14,9 @@ import { destekModundaYasakMi, DESTEK_ENGEL_MESAJI } from './permissions.js'
 // (app.getPath('logs') altında dönen dosya; Ayarlar > Log Klasörünü Aç ile açılan klasörle aynı)
 log.initialize()
 log.transports.file.level = 'info'
+
+// Fotoğraf protokolünün ayrıcalıkları app 'ready' olmadan önce tanıtılmalıdır.
+fotografSemasiniTanimla()
 
 import { registerCustomerHandlers } from './controllers/customerController.js'
 import { registerPartHandlers } from './controllers/partController.js'
@@ -88,6 +92,29 @@ function createWindow() {
     autoHideMenuBar: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js')
+    }
+  })
+
+  // Uygulama tek pencerede çalışır ve yalnızca kendi yerel arayüzünü yükler.
+  // Aşağıdaki iki koruma, beklenmedik bir bağlantının (ör. arayüze bir şekilde
+  // sızmış bir adres) kendi penceresini açmasını ya da ana pencereyi dış bir
+  // siteye götürmesini engeller. Dış adresler sistem tarayıcısına yönlendirilir.
+  const disAdresMi = (url: string) => /^https?:\/\//i.test(url)
+
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (disAdresMi(url)) {
+      void shell.openExternal(url)
+    }
+    return { action: 'deny' }
+  })
+
+  win.webContents.on('will-navigate', (event, url) => {
+    const izinliKok = VITE_DEV_SERVER_URL || 'file://'
+    if (url.startsWith(izinliKok)) return
+
+    event.preventDefault()
+    if (disAdresMi(url)) {
+      void shell.openExternal(url)
     }
   })
 
@@ -441,6 +468,9 @@ app.on('activate', () => {
 app.whenReady().then(async () => {
   initDB()
   runPhoneServerMigrations()
+  // Veritabanı hazır olduktan sonra kaydedilir: işleyici fotoğraf yolunu
+  // work_order_photos tablosundan okuyor.
+  fotografProtokolunuKaydet()
   ipcKopruleriniKur()
   Menu.setApplicationMenu(null)
 

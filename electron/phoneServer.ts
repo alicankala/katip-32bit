@@ -5,6 +5,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { app } from 'electron'
 import db from './database.js'
+import { fotografiBufferdanKucult } from './photoUtils.js'
 import { hashPin, verifyPin } from './security'
 import { gunSonuVerisiHesapla, bugununTarihi, kapaliGunKontrol } from './controllers/closingController.js'
 import { isRestoreInProgress } from './restoreState.js'
@@ -33,6 +34,56 @@ const PRIMEICONS_FONT_CONTENT_TYPES: Record<string, string> = {
   '.woff': 'font/woff',
   '.ttf': 'font/ttf',
   '.svg': 'image/svg+xml'
+}
+
+// İstek gövdesi için üst sınır. En büyük gövde fotoğraf yüklemesi; telefon
+// fotoğrafı gönderilmeden önce tarayıcıda 1280 piksele küçültülüp JPEG'e
+// çevriliyor (bkz. compressAndBase64), yani birkaç yüz KB'ı geçmiyor. 25 MB
+// normal kullanım için fazlasıyla bol, buna karşılık ağdaki bir cihazın sınırsız
+// veri gönderip belleği şişirmesini engelliyor.
+const MAX_GOVDE_BAYT = 25 * 1024 * 1024
+
+// İsteğe boyut sınırı bağlar. Sınır aşılırsa 413 döner ve bağlantıyı koparır;
+// bağlantı koptuğu için isteğin 'end' olayı hiç tetiklenmez, dolayısıyla
+// çağıran taraftaki gövde işleme mantığı da çalışmaz.
+function govdeSiniriUygula(
+  req: http.IncomingMessage,
+  res: http.ServerResponse,
+  maxBayt: number = MAX_GOVDE_BAYT
+): void {
+  const beyanEdilenUzunluk = Number(req.headers['content-length'] || 0)
+
+  const reddet = () => {
+    try {
+      if (!res.headersSent) {
+        res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8' })
+        res.end(JSON.stringify({ success: false, error: 'Gönderilen veri çok büyük.' }))
+      }
+    } catch (e) {
+      /* yanıt zaten kapanmış olabilir */
+    }
+    req.destroy()
+  }
+
+  if (Number.isFinite(beyanEdilenUzunluk) && beyanEdilenUzunluk > maxBayt) {
+    reddet()
+    return
+  }
+
+  let toplamBayt = 0
+  let asildi = false
+
+  req.on('data', (chunk: string | Buffer) => {
+    if (asildi) return
+    // req.setEncoding('utf8') kurulu olduğu için parçalar metin gelir;
+    // byteLength gerçek bayt sayısını verir.
+    toplamBayt += Buffer.byteLength(chunk as any)
+    if (toplamBayt > maxBayt) {
+      asildi = true
+      console.warn('[PhoneServer] Gövde sınırı aşıldı, istek reddedildi.')
+      reddet()
+    }
+  })
 }
 
 function escapeHtml(value: unknown): string {
@@ -105,6 +156,11 @@ export interface PairingTokenInfo {
 
 const SESSION_TTL_MS = 24 * 60 * 60 * 1000 // 24 saat hareketsizlik sonrası oturum sona erer
 
+// Açık TCP soketleri. Node 16'da server.closeAllConnections() olmadığı için
+// (bkz. stopPhoneServer) sunucuyu durdururken bağlantıları elle kapatabilmek
+// amacıyla izleniyor.
+const acikSoketler = new Set<import('node:net').Socket>()
+
 let server: http.Server | null = null
 let currentPort = 4317
 let isRunning = false
@@ -158,7 +214,35 @@ function recordLoginSuccess(ip: string) {
   failedLoginAttempts.delete(ip)
 }
 
+// Süresi dolmuş kayıtları üç haritadan da siler.
+//
+// Eşleşme kodları (QR) yalnızca biri onları kullanmaya kalkarsa siliniyordu;
+// hiç okutulmayan her QR kodu haritada kalıcı olarak birikiyordu. Aynı şekilde
+// bir daha bağlanmayan telefonun oturumu ve eski hatalı giriş kayıtları da
+// kendiliğinden düşmüyordu. Temizlik, bu haritalara yeni kayıt eklenen ya da
+// içerikleri okunan noktalarda çalıştırılıyor; ayrı bir zamanlayıcı gerekmiyor.
+function suresiDolanKayitlariTemizle(): void {
+  const simdi = Date.now()
+
+  for (const [anahtar, bilgi] of activePairingTokens) {
+    if (simdi > bilgi.expiresAt) activePairingTokens.delete(anahtar)
+  }
+
+  for (const [anahtar, oturum] of activeMobileSessions) {
+    if (simdi - oturum.lastActiveAt > SESSION_TTL_MS) activeMobileSessions.delete(anahtar)
+  }
+
+  for (const [ip, kayit] of failedLoginAttempts) {
+    // Kilit süresi dolmuş ve pencere kapanmışsa kayıt gereksiz.
+    if (kayit.lockUntil <= simdi && simdi - kayit.firstAttemptAt > 5 * 60 * 1000) {
+      failedLoginAttempts.delete(ip)
+    }
+  }
+}
+
 export function generatePairingToken(masterId?: number, durationSeconds = 30) {
+  suresiDolanKayitlariTemizle()
+
   let masterName = 'Tüm Ustalar / Genel'
   let mId = Number(masterId) || 0
   if (mId > 0) {
@@ -185,6 +269,9 @@ export function generatePairingToken(masterId?: number, durationSeconds = 30) {
 }
 
 export function getMobileSessionsList(): MobileSession[] {
+  // Ayarlardaki "bağlı cihazlar" listesi böylece süresi dolmuş oturumları da
+  // göstermemiş olur.
+  suresiDolanKayitlariTemizle()
   const list: MobileSession[] = []
   for (const sess of activeMobileSessions.values()) {
     list.push({ ...sess })
@@ -266,18 +353,60 @@ export function getCurrentPort(): number {
 
 export function stopPhoneServer(): Promise<boolean> {
   return new Promise((resolve) => {
-    if (server) {
-      server.close((err) => {
-        if (err) {
-          console.error('[PhoneServer] Stop error:', err)
-        }
-        server = null
-        isRunning = false
-        resolve(true)
-      })
-    } else {
+    const mevcutServer = server
+    if (!mevcutServer) {
+      resolve(true)
+      return
+    }
+
+    let tamamlandi = false
+    let zamanlayici: ReturnType<typeof setTimeout> | null = null
+
+    const bitir = () => {
+      if (tamamlandi) return
+      tamamlandi = true
+      if (zamanlayici) clearTimeout(zamanlayici)
+      server = null
+      isRunning = false
       resolve(true)
     }
+
+    mevcutServer.close((err) => {
+      if (err) {
+        console.error('[PhoneServer] Stop error:', err)
+      }
+      bitir()
+    })
+
+    // close() yalnızca yeni bağlantı kabul etmeyi durdurur; açık bağlantıların
+    // kendiliğinden kapanmasını bekler. Mobil istemci düzenli aralıkla yoklama
+    // yaptığı için bağlantı canlı kalıyor ve yukarıdaki geri çağrı hiç
+    // çalışmayabiliyordu: "Telefon erişimini durdur" asılı kalırdı. Açık
+    // bağlantılar da açıkça kapatılıyor.
+    //
+    // server.closeAllConnections() Node 18.2 ile geldi; bu depo Windows 7 için
+    // Electron 22'de sabit ve orada Node 16.17 var, yani o fonksiyon YOK.
+    // Bu yüzden açık soketler ayrıca izleniyor (bkz. acikSoketler) ve gerekirse
+    // elle kapatılıyor. Kod her iki durumda da çalışır.
+    try {
+      if (typeof mevcutServer.closeAllConnections === 'function') {
+        mevcutServer.closeAllConnections()
+      } else {
+        for (const soket of acikSoketler) {
+          try { soket.destroy() } catch (e) { /* zaten kapanmış olabilir */ }
+        }
+        acikSoketler.clear()
+      }
+    } catch (e) {
+      console.warn('[PhoneServer] Açık bağlantılar kapatılamadı:', e)
+    }
+
+    // Son güvence: her ihtimale karşı 3 saniye içinde yanıt dönülür, böylece
+    // arayüzdeki düğme hiçbir durumda sonsuza kadar beklemede kalmaz.
+    zamanlayici = setTimeout(() => {
+      console.warn('[PhoneServer] Kapanma zaman aşımına uğradı, durdurulmuş sayılıyor.')
+      bitir()
+    }, 3000)
   })
 }
 
@@ -1986,7 +2115,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     try {
       activeToken = storedToken;
       activeUser = JSON.parse(storedUser);
-      const checkRes = await fetch('/api/dashboard', {
+      // Yalnizca token hala gecerli mi diye bakiliyor; asagidaki loadDashboard()
+      // zaten istatistikleri kendisi cekiyordu. Bu yuzden agir /api/dashboard
+      // yerine sorgusuz /api/session/ping kullaniliyor (ayni .ok semantigi).
+      const checkRes = await fetch('/api/session/ping', {
         headers: {
           'Authorization': 'Bearer ' + storedToken,
           'X-Mobile-Token': storedToken
@@ -2027,10 +2159,13 @@ window.addEventListener('pageshow', (event) => {
 });
 
 // Periodic session check to instantly logout phone if session is revoked from desktop
+// Not: /api/dashboard yerine /api/session/ping kullanilir. Yoklamanin tek ihtiyaci
+// 401 kontrolu; dashboard uc noktasi ise her cagrida tum tablolari tarayan toplama
+// sorgulari calistirip masaustu arayuzunu bloke ediyordu.
 setInterval(async () => {
   if (activeToken && screens.dashboard.style.display !== 'none') {
     try {
-      const pingRes = await fetch('/api/dashboard', {
+      const pingRes = await fetch('/api/session/ping', {
         headers: {
           'Authorization': 'Bearer ' + activeToken,
           'X-Mobile-Token': activeToken
@@ -3851,6 +3986,7 @@ document
 
           if (req.method === 'POST') {
             let body = ''
+            govdeSiniriUygula(req, res)
             req.on('data', chunk => body += chunk)
             req.on('end', () => {
               try {
@@ -3884,6 +4020,7 @@ document
           }
 
           let body = ''
+          govdeSiniriUygula(req, res)
           req.on('data', chunk => body += String(chunk))
           req.on('end', () => {
             try {
@@ -3953,6 +4090,74 @@ document
           return
         }
 
+        // 3d. Fotoğraf baytları
+        //
+        // Bu uç nokta bilerek yetki katmanının ÜSTÜNDE duruyor: adres bir
+        // <img src> içine konuyor ve tarayıcı <img> isteklerine Authorization
+        // başlığı eklemiyor. Bu yüzden oturum belirteci sorgu dizesinden
+        // (?t=) okunuyor; doğrulama aşağıdaki middleware ile aynı kurallara
+        // (oturum var mı + TTL) tabi.
+        if (pathName === '/api/photo') {
+          const sorguToken = String(parsedUrl.searchParams.get('t') || '').trim()
+          const fotoOturum = activeMobileSessions.get(sorguToken)
+          if (!sorguToken || !fotoOturum || Date.now() - fotoOturum.lastActiveAt > SESSION_TTL_MS) {
+            if (sorguToken) activeMobileSessions.delete(sorguToken)
+            res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify({ success: false, error: 'Yetkisiz erişim.', requireLogin: true }))
+            return
+          }
+
+          try {
+            const fotoId = Number(parsedUrl.searchParams.get('id'))
+            if (!Number.isFinite(fotoId) || fotoId <= 0) {
+              res.writeHead(400)
+              res.end()
+              return
+            }
+
+            const satir = db.prepare('SELECT file_path FROM work_order_photos WHERE id = ?').get(fotoId) as any
+            const dosyaYolu = String(satir?.file_path || '')
+            if (!dosyaYolu) {
+              res.writeHead(404)
+              res.end()
+              return
+            }
+
+            // Veritabanındaki yola körü körüne güvenilmez; fotoğraf klasörünün
+            // dışını gösteren bir kayıt servis edilmez.
+            const kok = path.resolve(path.join(app.getPath('userData'), 'fotograflar'))
+            const tamYol = path.resolve(dosyaYolu)
+            if (tamYol !== kok && !tamYol.startsWith(kok + path.sep)) {
+              console.warn('[PhoneServer] Fotograf klasoru disindaki yol reddedildi:', dosyaYolu)
+              res.writeHead(403)
+              res.end()
+              return
+            }
+
+            const veri = await fs.readFile(tamYol)
+            const uzanti = path.extname(tamYol).toLowerCase()
+            const icerikTuru = uzanti === '.png' ? 'image/png'
+              : uzanti === '.webp' ? 'image/webp'
+              : uzanti === '.gif' ? 'image/gif'
+              : uzanti === '.bmp' ? 'image/bmp'
+              : 'image/jpeg'
+
+            res.writeHead(200, {
+              'Content-Type': icerikTuru,
+              'Content-Length': veri.length,
+              // Bir fotoğraf satırı hep aynı kareyi gösterir (silme + yeni
+              // kayıt yeni bir id üretir), bu yüzden önbelleklemek güvenli.
+              'Cache-Control': 'private, max-age=3600'
+            })
+            res.end(veri)
+          } catch (err) {
+            console.warn('[PhoneServer] Fotograf okunamadi:', err)
+            res.writeHead(404)
+            res.end()
+          }
+          return
+        }
+
         // ── Bearer Token Authorization Middleware for Protected API Endpoints ──
         const authHeader = req.headers['authorization'] || req.headers['x-mobile-token']
         const token = Array.isArray(authHeader) ? authHeader[0] : authHeader
@@ -3966,6 +4171,28 @@ document
           return
         }
         currentSession.lastActiveAt = Date.now()
+
+        // 3c. API: Oturum yoklaması (yalnızca canlılık kontrolü)
+        //
+        // Mobil istemci, masaüstünden oturum kapatıldığını hemen anlamak için
+        // düzenli aralıkla yoklama yapıyor. Eskiden bunun için /api/dashboard
+        // çağrılıyordu; o uç nokta her seferinde work_orders/vehicles/customers
+        // join'i ve parts üzerinde tam tarama yapan beş toplama sorgusu
+        // çalıştırıyor. better-sqlite3 senkron olduğu için bu sorgular
+        // masaüstü arayüzünü besleyen main process thread'ini bloke ediyordu:
+        // bağlı her telefon, dakikada ~15 kez tüm tabloları taratıyordu.
+        //
+        // Yoklamanın tek ihtiyacı 401 dönüp dönmediği. Bu uç nokta hiç sorgu
+        // çalıştırmaz; oturum geçersizse zaten yukarıdaki middleware 401 verir,
+        // geçerliyse lastActiveAt tazelenip buradan boş yanıt döner.
+        if (pathName === '/api/session/ping') {
+          res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store'
+          })
+          res.end(JSON.stringify({ success: true }))
+          return
+        }
 
         // 4. API: Dashboard statistics count
         if (pathName === '/api/dashboard') {
@@ -4136,12 +4363,15 @@ document
 
             const fotograflar: any[] = []
             for (const row of rows) {
+              // Eskiden her fotoğrafın tamamı okunup base64 olarak bu yanıta
+              // gömülüyordu (base64 boyutu %33 şişirir ve hepsi tek bir JSON
+              // metninde birikirdi). Artık yalnızca "dosya duruyor mu" diye
+              // bakılıp /api/photo adresi veriliyor; baytları tarayıcı <img>
+              // göründükçe, önbelleğe alarak ayrı ayrı çekiyor.
               let url = ''
               try {
-                const fileData = await fs.readFile(row.file_path)
-                const ext = path.extname(row.file_path).toLowerCase().replace('.', '') || 'jpeg'
-                const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
-                url = `data:${mimeType};base64,${fileData.toString('base64')}`
+                await fs.access(row.file_path)
+                url = `/api/photo?id=${Number(row.id)}&t=${encodeURIComponent(cleanToken)}`
               } catch (e) {
                 console.warn('[Photos] Dosya okunamadı:', row.file_path, e)
               }
@@ -4168,6 +4398,7 @@ document
 
         if (pathName === '/api/upload-photo' && req.method === 'POST') {
           let body = ''
+          govdeSiniriUygula(req, res)
           req.on('data', chunk => body += chunk)
           req.on('end', async () => {
             try {
@@ -4190,7 +4421,18 @@ document
               const targetFileName = `wo_${woId}_mob_${Date.now()}.jpg`
               const targetPath = path.join(photoDir, targetFileName)
 
-              await fs.writeFile(targetPath, imageBuffer)
+              // Telefon kamerasından gelen kare masaüstü yolundaki sınırlara
+              // indirilir. Küçültme başarısız olursa ham veri yazılır; fotoğraf
+              // hiçbir durumda kaybolmaz (eski davranış).
+              let yazilacak: Buffer = imageBuffer
+              try {
+                const kucultulmus = fotografiBufferdanKucult(imageBuffer)
+                if (kucultulmus) yazilacak = kucultulmus
+              } catch (e) {
+                console.warn('[PhotoUpload] Küçültme yapılamadı, ham veri yazılıyor:', e)
+              }
+
+              await fs.writeFile(targetPath, yazilacak)
 
               db.prepare(`
                 INSERT INTO work_order_photos (work_order_id, file_name, file_path, category, note)
@@ -4210,6 +4452,7 @@ document
 
         if (pathName === '/api/delete-photo' && req.method === 'POST') {
           let body = ''
+          govdeSiniriUygula(req, res)
           req.on('data', chunk => body += chunk)
           req.on('end', async () => {
             try {
@@ -4297,6 +4540,7 @@ document
         // 5.8 API: Save Customer Digital Signature
         if (pathName === '/api/work-orders/signature' && req.method === 'POST') {
           let body = ''
+          govdeSiniriUygula(req, res)
           req.on('data', chunk => body += chunk)
           req.on('end', () => {
             try {
@@ -4329,6 +4573,7 @@ document
         // 5.9 API: OCR Scan
         if (pathName === '/api/ocr-scan' && req.method === 'POST') {
           let body = ''
+          govdeSiniriUygula(req, res)
           req.on('data', chunk => body += chunk)
           req.on('end', () => {
             try {
@@ -4437,32 +4682,37 @@ document
               LIMIT 50
             `).all(searchVal, searchVal, searchVal) as any[]
 
+            // Sorgu döngünün DIŞINDA bir kez hazırlanır. Eskiden aynı SQL her
+            // araç için yeniden derleniyordu (50 araç = 50 kez ayrıştırma).
+            // Sorgunun kendisi ve sonuç sırası birebir aynı.
+            const isEmirleriSorgusu = db.prepare(`
+              SELECT
+                wo.id AS work_order_id,
+                wo.created_at,
+                wo.closed_at,
+                wo.status,
+                wo.description AS complaint,
+                opened_master.name AS opened_by_master_name,
+                closed_master.name AS closed_by_master_name,
+                (
+                  SELECT COUNT(*)
+                  FROM work_order_photos
+                  WHERE work_order_id = wo.id
+                ) AS photo_count,
+                (
+                  SELECT SUM(total_price)
+                  FROM work_order_items
+                  WHERE work_order_id = wo.id
+                ) AS total_amount
+              FROM work_orders wo
+              LEFT JOIN masters opened_master ON wo.opened_by_master_id = opened_master.id
+              LEFT JOIN masters closed_master ON wo.closed_by_master_id = closed_master.id
+              WHERE wo.vehicle_id = ?
+              ORDER BY wo.created_at DESC
+            `)
+
             const results = vehicles.map(vehicle => {
-              const workOrders = db.prepare(`
-                SELECT 
-                  wo.id AS work_order_id,
-                  wo.created_at,
-                  wo.closed_at,
-                  wo.status,
-                  wo.description AS complaint,
-                  opened_master.name AS opened_by_master_name,
-closed_master.name AS closed_by_master_name,
-(
-  SELECT COUNT(*)
-  FROM work_order_photos
-  WHERE work_order_id = wo.id
-) AS photo_count,
-(
-  SELECT SUM(total_price)
-                    FROM work_order_items 
-                    WHERE work_order_id = wo.id
-                  ) AS total_amount
-                FROM work_orders wo
-                LEFT JOIN masters opened_master ON wo.opened_by_master_id = opened_master.id
-                LEFT JOIN masters closed_master ON wo.closed_by_master_id = closed_master.id
-                WHERE wo.vehicle_id = ?
-                ORDER BY wo.created_at DESC
-              `).all(vehicle.vehicle_id) as any[]
+              const workOrders = isEmirleriSorgusu.all(vehicle.vehicle_id) as any[]
 
               return {
                 ...vehicle,
@@ -4514,6 +4764,7 @@ closed_master.name AS closed_by_master_name,
         // 8. API: Create Service Reception
         if (pathName === '/api/service-reception' && req.method === 'POST') {
           let body = ''
+          govdeSiniriUygula(req, res)
           req.on('data', chunk => body += chunk)
           req.on('end', () => {
             try {
@@ -4561,6 +4812,7 @@ closed_master.name AS closed_by_master_name,
         // 10. API: Add labor item
         if (pathName === '/api/work-order-items/labor' && req.method === 'POST') {
           let body = ''
+          govdeSiniriUygula(req, res)
           req.on('data', chunk => body += chunk)
           req.on('end', () => {
             try {
@@ -4581,6 +4833,7 @@ closed_master.name AS closed_by_master_name,
         // 11. API: Add part item and modify stock
         if (pathName === '/api/work-order-items/part' && req.method === 'POST') {
           let body = ''
+          govdeSiniriUygula(req, res)
           req.on('data', chunk => body += chunk)
           req.on('end', () => {
             try {
@@ -4601,6 +4854,7 @@ closed_master.name AS closed_by_master_name,
         // 12. API: Delete item and restore stock
         if (pathName === '/api/work-order-items/delete' && req.method === 'POST') {
           let body = ''
+          govdeSiniriUygula(req, res)
           req.on('data', chunk => body += chunk)
           req.on('end', () => {
             try {
@@ -4621,6 +4875,7 @@ closed_master.name AS closed_by_master_name,
         // 13. API: Complete work order
         if (pathName === '/api/work-orders/complete' && req.method === 'POST') {
           let body = ''
+          govdeSiniriUygula(req, res)
           req.on('data', chunk => body += chunk)
           req.on('end', () => {
             try {
@@ -4740,6 +4995,13 @@ closed_master.name AS closed_by_master_name,
         // Default 404
         res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' })
         res.end('Bulunamadi')
+      })
+
+      // Açık soketler izleniyor; Node 16'da closeAllConnections() olmadığı için
+      // sunucu durdurulurken bunlar elle kapatılıyor (bkz. stopPhoneServer).
+      tempServer.on('connection', (soket) => {
+        acikSoketler.add(soket)
+        soket.on('close', () => acikSoketler.delete(soket))
       })
 
       tempServer.on('error', (err: any) => {

@@ -179,7 +179,16 @@ onUnmounted(() => {
     <DestekModuUyarisi aciklama="Müşteri ekleme, düzenleme ve pasife alma destek modunda kapalıdır." />
 
     <div class="table-panel">
-      <DataTable :value="filtrelenmisMusteriler" :loading="yukleniyor" responsiveLayout="scroll">
+      <!-- alwaysShowPaginator=false: liste tek sayfaya sığıyorsa sayfalama
+           çubuğu görünmez, yani az kayıtlı kurulumlarda görüntü değişmez. -->
+      <DataTable
+        :value="filtrelenmisMusteriler"
+        :loading="yukleniyor"
+        responsiveLayout="scroll"
+        paginator
+        :rows="50"
+        :alwaysShowPaginator="false"
+      >
         <template #empty>
           <EmptyState
             v-if="aramaKelimesi"
