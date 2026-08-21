@@ -1,4 +1,4 @@
-name: Database integration
+name: Full verification
 
 on:
   push:
@@ -20,7 +20,12 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx vue-tsc --noEmit
+      - run: npm run test:unit
+      - run: npm run test:integration
+      - run: npm run test:business
+      - run: npm run test:stage4
       - run: npm run build -- --publish never
       # Build, better-sqlite3 native modulunu Electron 22 ABI v110 + ia32 icin
-      # hazirlar; entegrasyon testi de ayni ia32 Electron calisma zamanini kullanir.
-      - run: npm test
+      # hazirlar; smoke testi ayni ia32 Electron calisma zamanini ve yalniz
+      # dogrulanmis gecici userData + SQLite kullanir.
+      - run: npm run test:smoke

@@ -18,6 +18,8 @@
     "test:business:watch": "vitest --config vitest.business.config.ts",
     "test:stage4": "vitest run --config vitest.stage4.config.ts",
     "test:stage4:watch": "vitest --config vitest.stage4.config.ts",
+    "test:smoke": "vitest run --config vitest.smoke.config.ts",
+    "test:smoke:watch": "vitest --config vitest.smoke.config.ts",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
