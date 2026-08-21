@@ -62,7 +62,7 @@ async function runnerHazirla(testRoot: string): Promise<{ runnerPath: string, no
   return { runnerPath: join(bundleRoot, `business-rules-runner.${runnerExtension}`), nodeModulesLink }
 }
 
-async function electronCalistirilabiliriniHazirla(testRoot: string): Promise<string> {
+async function electronCalistirilabiliriniHazirla(testRoot: string): Promise<{ electronPath: string, electronRoot: string }> {
   if (process.platform !== 'win32') {
     throw new Error('Kâtip Electron entegrasyon testleri Windows uzerinde calistirilmalidir.')
   }
@@ -90,7 +90,7 @@ async function electronCalistirilabiliriniHazirla(testRoot: string): Promise<str
     artifactName: 'electron'
   })
   await extractZip(zipPath, { dir: electronRoot })
-  return join(electronRoot, 'electron.exe')
+  return { electronPath: join(electronRoot, 'electron.exe'), electronRoot }
 }
 
 beforeAll(async () => {
@@ -98,7 +98,7 @@ beforeAll(async () => {
   const scenarioRoot = join(testRoot, 'business-rules')
   mkdirSync(scenarioRoot, { recursive: true })
   const { runnerPath, nodeModulesLink } = await runnerHazirla(testRoot)
-  const electronPath = await electronCalistirilabiliriniHazirla(testRoot)
+  const { electronPath, electronRoot } = await electronCalistirilabiliriniHazirla(testRoot)
 
   try {
     const { stdout } = await execFileAsync(
@@ -120,6 +120,7 @@ beforeAll(async () => {
     report = JSON.parse(resultLine.slice(RESULT_PREFIX.length))
   } finally {
     rmSync(nodeModulesLink, { recursive: true, force: true })
+    rmSync(electronRoot, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 })
   }
 })
 
