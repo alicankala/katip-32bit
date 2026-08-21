@@ -9,11 +9,13 @@
     "dev": "vite",
     "build": "vue-tsc && vite build && electron-builder",
     "preview": "vite preview",
-    "test": "npm run test:unit && npm run test:integration",
+    "test": "npm run test:unit && npm run test:integration && npm run test:business",
     "test:unit": "vitest run --config vitest.config.ts",
     "test:unit:watch": "vitest --config vitest.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:integration:watch": "vitest --config vitest.integration.config.ts",
+    "test:business": "vitest run --config vitest.business.config.ts",
+    "test:business:watch": "vitest --config vitest.business.config.ts",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
