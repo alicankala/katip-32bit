@@ -127,7 +127,8 @@ async function calistir(): Promise<void> {
       tables: tabloAdlari(db),
       indexes: indeksAdlari(db),
       quickCheck: quickCheck(db),
-      foreignKeys: Number(db.pragma('foreign_keys', { simple: true }))
+      foreignKeys: Number(db.pragma('foreign_keys', { simple: true })),
+      mmapSize: Number(db.pragma('mmap_size', { simple: true }))
     }
 
     if (scenario === 'fresh') {

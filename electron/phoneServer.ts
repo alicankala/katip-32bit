@@ -1,6 +1,7 @@
 import http from 'node:http'
 import os from 'node:os'
 import crypto from 'node:crypto'
+import { createReadStream } from 'node:fs'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { app } from 'electron'
@@ -3860,7 +3861,8 @@ document
               return
             }
 
-            const veri = await fs.readFile(tamYol)
+            const dosyaBilgisi = await fs.stat(tamYol)
+            if (!dosyaBilgisi.isFile()) throw new Error('Fotoğraf yolu bir dosya değil.')
             const uzanti = path.extname(tamYol).toLowerCase()
             const icerikTuru = uzanti === '.png' ? 'image/png'
               : uzanti === '.webp' ? 'image/webp'
@@ -3870,12 +3872,25 @@ document
 
             res.writeHead(200, {
               'Content-Type': icerikTuru,
-              'Content-Length': veri.length,
+              'Content-Length': dosyaBilgisi.size,
               // Bir fotoğraf satırı hep aynı kareyi gösterir (silme + yeni
               // kayıt yeni bir id üretir), bu yüzden önbelleklemek güvenli.
               'Cache-Control': 'private, max-age=3600'
             })
-            res.end(veri)
+            // Fotoğrafı tek parça Buffer olarak ana süreç belleğine alma. Özellikle
+            // x86 adres alanında eşzamanlı telefon istekleri için akış kullanılır.
+            const fotografAkisi = createReadStream(tamYol)
+            fotografAkisi.on('error', (error) => {
+              console.warn('[PhoneServer] Fotograf akisi okunamadi:', error)
+              if (!res.headersSent) {
+                res.writeHead(404)
+                res.end()
+              } else {
+                res.destroy(error)
+              }
+            })
+            res.on('close', () => fotografAkisi.destroy())
+            fotografAkisi.pipe(res)
           } catch (err) {
             console.warn('[PhoneServer] Fotograf okunamadi:', err)
             res.writeHead(404)

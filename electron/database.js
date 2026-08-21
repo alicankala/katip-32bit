@@ -46,7 +46,9 @@ function ozellestirilmisFonksiyonlariTanimla(targetDb) {
     targetDb.pragma('synchronous = NORMAL;');
     targetDb.pragma('temp_store = MEMORY;');
     targetDb.pragma('cache_size = -16000;'); // ~16MB sayfa önbelleği
-    targetDb.pragma('mmap_size = 268435456;'); // 256MB memory-mapped okuma
+    // 32-bit süreçte 256 MB'lik eşleme tavanı sınırlı sanal adres alanını gereksiz
+    // daraltıyordu. 64 MB, büyük listelerde mmap okumasını korurken x86'a alan bırakır.
+    targetDb.pragma('mmap_size = 67108864;');
   } catch (err) {
     console.warn('[DB] PRAGMA set warning:', err);
   }

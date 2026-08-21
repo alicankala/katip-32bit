@@ -211,6 +211,10 @@ describe('veritabani ve migration entegrasyonu', () => {
     expect(freshReport.orphanCount).toBe(0)
   })
 
+  it('mimariye uygun SQLite mmap bellek tavanini uygular', () => {
+    expect(freshReport.mmapSize).toBe(esmRuntime ? 268435456 : 67108864)
+  })
+
   it('kritik indeksleri olusturur', () => {
     expect(freshReport.indexes).toEqual(expect.arrayContaining(CRITICAL_INDEXES))
   })
