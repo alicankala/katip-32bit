@@ -23,7 +23,7 @@
   "publish": {
     "provider": "github",
     "owner": "alicankala",
-    "repo": "katip-x86"
+    "repo": "katip-32bit"
   },
 
 "win": {

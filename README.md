@@ -1,6 +1,6 @@
 # Kâtip (32-bit / Windows 7 sürümü)
 
-Bu repo, [alicankala/katip](https://github.com/alicankala/katip) projesinin **32-bit (x86) ve Windows 7** hedefli koludur. Kendi GitHub release/otomatik güncelleme kanalını kullanır, böylece 64-bit sürümle karışmaz.
+Bu repo, [alicankala/katip-64bit](https://github.com/alicankala/katip-64bit) projesinin **32-bit (x86) ve Windows 7** hedefli koludur. Kendi GitHub release/otomatik güncelleme kanalını kullanır, böylece 64-bit sürümle karışmaz.
 
 ## Ana repodan farkları — değiştirmeden önce okuyun
 
