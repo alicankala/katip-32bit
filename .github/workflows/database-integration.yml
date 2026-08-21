@@ -1,0 +1,26 @@
+name: Database integration
+
+on:
+  push:
+    branches:
+      - master
+      - 'test/**'
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx vue-tsc --noEmit
+      - run: npm run build
+      # Build, better-sqlite3 native modulunu Electron 22 ABI v110 + ia32 icin
+      # hazirlar; entegrasyon testi de ayni ia32 Electron calisma zamanini kullanir.
+      - run: npm test
