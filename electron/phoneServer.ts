@@ -9,153 +9,28 @@ import { fotografiBufferdanKucult } from './photoUtils.js'
 import { hashPin, verifyPin } from './security'
 import { gunSonuVerisiHesapla, bugununTarihi, kapaliGunKontrol } from './controllers/closingController.js'
 import { isEmriToplaminiGuncelle } from './controllers/workOrderController.js'
+import { stokHareketiKaydet } from './controllers/partController.js'
 import { isRestoreInProgress } from './restoreState.js'
+import { escapeHtml, govdeSiniriUygula } from './phoneHttpUtils.js'
+import { runPhoneServerMigrations } from './phoneMigrations.js'
+import { PRIMEICONS_FONT_CONTENT_TYPES, primeiconsAssetOku } from './phoneAssets.js'
+import {
+  SESSION_TTL_MS,
+  activeMobileSessions,
+  activePairingTokens,
+  checkLoginRateLimit,
+  getMobileSessionsList,
+  recordLoginFailure,
+  recordLoginSuccess,
+  revokeAllMobileSessions,
+  revokeMobileSession,
+  suresiDolanKayitlariTemizle,
+  type PairingTokenInfo
+} from './phoneAuthState.js'
 
-// PrimeIcons artık harici bir CDN'den (unpkg) değil, uygulamayla birlikte gelen
-// node_modules/primeicons paketinden yerel olarak servis ediliyor (internet bağımlılığını kaldırır).
-const primeiconsAssetCache = new Map<string, Buffer>()
-
-async function primeiconsAssetOku(relativePath: string): Promise<Buffer | null> {
-  if (primeiconsAssetCache.has(relativePath)) {
-    return primeiconsAssetCache.get(relativePath) || null
-  }
-  try {
-    const fullPath = path.join(app.getAppPath(), 'node_modules', 'primeicons', relativePath)
-    const data = await fs.readFile(fullPath)
-    primeiconsAssetCache.set(relativePath, data)
-    return data
-  } catch (e) {
-    return null
-  }
-}
-
-const PRIMEICONS_FONT_CONTENT_TYPES: Record<string, string> = {
-  '.eot': 'application/vnd.ms-fontobject',
-  '.woff2': 'font/woff2',
-  '.woff': 'font/woff',
-  '.ttf': 'font/ttf',
-  '.svg': 'image/svg+xml'
-}
-
-// İstek gövdesi için üst sınır. En büyük gövde fotoğraf yüklemesi; telefon
-// fotoğrafı gönderilmeden önce tarayıcıda 1280 piksele küçültülüp JPEG'e
-// çevriliyor (bkz. compressAndBase64), yani birkaç yüz KB'ı geçmiyor. 25 MB
-// normal kullanım için fazlasıyla bol, buna karşılık ağdaki bir cihazın sınırsız
-// veri gönderip belleği şişirmesini engelliyor.
-const MAX_GOVDE_BAYT = 25 * 1024 * 1024
-
-// İsteğe boyut sınırı bağlar. Sınır aşılırsa 413 döner ve bağlantıyı koparır;
-// bağlantı koptuğu için isteğin 'end' olayı hiç tetiklenmez, dolayısıyla
-// çağıran taraftaki gövde işleme mantığı da çalışmaz.
-function govdeSiniriUygula(
-  req: http.IncomingMessage,
-  res: http.ServerResponse,
-  maxBayt: number = MAX_GOVDE_BAYT
-): void {
-  const beyanEdilenUzunluk = Number(req.headers['content-length'] || 0)
-
-  const reddet = () => {
-    try {
-      if (!res.headersSent) {
-        res.writeHead(413, { 'Content-Type': 'application/json; charset=utf-8' })
-        res.end(JSON.stringify({ success: false, error: 'Gönderilen veri çok büyük.' }))
-      }
-    } catch (e) {
-      /* yanıt zaten kapanmış olabilir */
-    }
-    req.destroy()
-  }
-
-  if (Number.isFinite(beyanEdilenUzunluk) && beyanEdilenUzunluk > maxBayt) {
-    reddet()
-    return
-  }
-
-  let toplamBayt = 0
-  let asildi = false
-
-  req.on('data', (chunk: string | Buffer) => {
-    if (asildi) return
-    // req.setEncoding('utf8') kurulu olduğu için parçalar metin gelir;
-    // byteLength gerçek bayt sayısını verir.
-    toplamBayt += Buffer.byteLength(chunk as any)
-    if (toplamBayt > maxBayt) {
-      asildi = true
-      console.warn('[PhoneServer] Gövde sınırı aşıldı, istek reddedildi.')
-      reddet()
-    }
-  })
-}
-
-function escapeHtml(value: unknown): string {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-}
-
-// Data migration for existing mobile work orders and items
-export function runPhoneServerMigrations() {
-  try {
-    db.prepare("UPDATE work_orders SET status = 'Açık' WHERE status = 'Acik'").run()
-    db.prepare("UPDATE work_orders SET status = 'Tamamlandı' WHERE status = 'Tamamlandi'").run()
-    db.prepare("UPDATE work_orders SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL").run()
-    
-    db.prepare("UPDATE work_order_items SET type = 'İşçilik' WHERE type = 'Iscilik'").run()
-    db.prepare("UPDATE work_order_items SET type = 'Parça' WHERE type = 'Parca'").run()
-    
-    db.prepare("UPDATE stock_movements SET type = 'Çıkış' WHERE type = 'Cikis'").run()
-    db.prepare("UPDATE stock_movements SET type = 'Giriş' WHERE type = 'Giris'").run()
-    db.prepare(`
-  UPDATE work_order_photos
-  SET category = 'Araç Kabul'
-  WHERE category IN (
-    'Ön',
-    'Arka',
-    'Sol',
-    'Sağ',
-    'KM / Gösterge'
-  )
-`).run()
-
-db.prepare(`
-  UPDATE work_order_photos
-  SET category = 'Hasar / Çizik'
-  WHERE category = 'Hasar / Diğer'
-`).run()
-
-db.prepare(`
-  UPDATE work_order_photos
-  SET category = 'Araç Kabul'
-  WHERE category IS NULL
-     OR TRIM(category) = ''
-`).run()
-  } catch (e) {
-    console.error('[PhoneServer] Existing work orders migration error:', e)
-  }
-}
-
-export interface MobileSession {
-  token: string
-  master_id: number
-  name: string
-  createdAt: number
-  lastActiveAt: number
-  ip: string
-  userAgent: string
-}
-
-export interface PairingTokenInfo {
-  token: string
-  master_id: number
-  master_name: string
-  expiresAt: number
-  createdAt: number
-}
-
-const SESSION_TTL_MS = 24 * 60 * 60 * 1000 // 24 saat hareketsizlik sonrası oturum sona erer
+export { getMobileSessionsList, revokeAllMobileSessions, revokeMobileSession }
+export { runPhoneServerMigrations }
+export type { MobileSession, PairingTokenInfo } from './phoneAuthState.js'
 
 // Açık TCP soketleri. Node 16'da server.closeAllConnections() olmadığı için
 // (bkz. stopPhoneServer) sunucuyu durdururken bağlantıları elle kapatabilmek
@@ -165,81 +40,6 @@ const acikSoketler = new Set<import('node:net').Socket>()
 let server: http.Server | null = null
 let currentPort = 4317
 let isRunning = false
-const activeMobileSessions = new Map<string, MobileSession>()
-const activePairingTokens = new Map<string, PairingTokenInfo>()
-
-interface FailedLoginRecord {
-  count: number
-  lockUntil: number
-  firstAttemptAt: number
-}
-const failedLoginAttempts = new Map<string, FailedLoginRecord>()
-
-function checkLoginRateLimit(ip: string): { locked: boolean; remainingSeconds: number } {
-  const record = failedLoginAttempts.get(ip)
-  if (!record) return { locked: false, remainingSeconds: 0 }
-
-  if (record.lockUntil > Date.now()) {
-    const rem = Math.ceil((record.lockUntil - Date.now()) / 1000)
-    return { locked: true, remainingSeconds: rem }
-  }
-
-  if (Date.now() - record.firstAttemptAt > 5 * 60 * 1000) {
-    failedLoginAttempts.delete(ip)
-    return { locked: false, remainingSeconds: 0 }
-  }
-
-  return { locked: false, remainingSeconds: 0 }
-}
-
-function recordLoginFailure(ip: string) {
-  const now = Date.now()
-  const record = failedLoginAttempts.get(ip) || { count: 0, lockUntil: 0, firstAttemptAt: now }
-
-  if (now - record.firstAttemptAt > 5 * 60 * 1000) {
-    record.count = 1
-    record.firstAttemptAt = now
-    record.lockUntil = 0
-  } else {
-    record.count += 1
-  }
-
-  if (record.count >= 15) {
-    record.lockUntil = now + 60 * 1000
-  }
-
-  failedLoginAttempts.set(ip, record)
-}
-
-function recordLoginSuccess(ip: string) {
-  failedLoginAttempts.delete(ip)
-}
-
-// Süresi dolmuş kayıtları üç haritadan da siler.
-//
-// Eşleşme kodları (QR) yalnızca biri onları kullanmaya kalkarsa siliniyordu;
-// hiç okutulmayan her QR kodu haritada kalıcı olarak birikiyordu. Aynı şekilde
-// bir daha bağlanmayan telefonun oturumu ve eski hatalı giriş kayıtları da
-// kendiliğinden düşmüyordu. Temizlik, bu haritalara yeni kayıt eklenen ya da
-// içerikleri okunan noktalarda çalıştırılıyor; ayrı bir zamanlayıcı gerekmiyor.
-function suresiDolanKayitlariTemizle(): void {
-  const simdi = Date.now()
-
-  for (const [anahtar, bilgi] of activePairingTokens) {
-    if (simdi > bilgi.expiresAt) activePairingTokens.delete(anahtar)
-  }
-
-  for (const [anahtar, oturum] of activeMobileSessions) {
-    if (simdi - oturum.lastActiveAt > SESSION_TTL_MS) activeMobileSessions.delete(anahtar)
-  }
-
-  for (const [ip, kayit] of failedLoginAttempts) {
-    // Kilit süresi dolmuş ve pencere kapanmışsa kayıt gereksiz.
-    if (kayit.lockUntil <= simdi && simdi - kayit.firstAttemptAt > 5 * 60 * 1000) {
-      failedLoginAttempts.delete(ip)
-    }
-  }
-}
 
 export function generatePairingToken(masterId?: number, durationSeconds = 30) {
   suresiDolanKayitlariTemizle()
@@ -267,33 +67,6 @@ export function generatePairingToken(masterId?: number, durationSeconds = 30) {
   const vTag = token.substring(0, 8)
   const url = mId > 0 ? `http://${ip}:${port}/?master_id=${mId}&v=${vTag}` : `http://${ip}:${port}/?v=${vTag}`
   return { success: true, token, pairingUrl: url, expiresAt, masterName }
-}
-
-export function getMobileSessionsList(): MobileSession[] {
-  // Ayarlardaki "bağlı cihazlar" listesi böylece süresi dolmuş oturumları da
-  // göstermemiş olur.
-  suresiDolanKayitlariTemizle()
-  const list: MobileSession[] = []
-  for (const sess of activeMobileSessions.values()) {
-    list.push({ ...sess })
-  }
-  return list.sort((a, b) => b.lastActiveAt - a.lastActiveAt)
-}
-
-export function revokeMobileSession(token: string) {
-  const cleanToken = String(token || '').trim()
-  activeMobileSessions.delete(cleanToken)
-  for (const [key, sess] of activeMobileSessions.entries()) {
-    if (key === cleanToken || sess.token === cleanToken) {
-      activeMobileSessions.delete(key)
-    }
-  }
-  return { success: true }
-}
-
-export function revokeAllMobileSessions() {
-  activeMobileSessions.clear()
-  return { success: true }
 }
 
 export interface LocalAddress {
@@ -412,40 +185,6 @@ export function stopPhoneServer(): Promise<boolean> {
 }
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ DATABASE HELPERS FOR WORK ORDERS & STOCKS Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-
-function stokHareketiKaydet(veri: {
-  partId: number
-  workOrderId?: number | null
-  type: string
-  quantity: number
-  oldStock: number
-  newStock: number
-  masterId?: number | null
-  note?: string
-}): void {
-  db.prepare(`
-    INSERT INTO stock_movements (
-      part_id,
-      work_order_id,
-      type,
-      quantity,
-      old_stock,
-      new_stock,
-      master_id,
-      note
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
-    Number(veri.partId),
-    veri.workOrderId ?? null,
-    veri.type,
-    Number(veri.quantity) || 0,
-    Number(veri.oldStock) || 0,
-    Number(veri.newStock) || 0,
-    veri.masterId ?? null,
-    veri.note ?? null
-  )
-}
 
 // Transactional helper to insert Customer -> Vehicle -> Work Order
 const createServiceReceptionTransaction = (data: any) => db.transaction((dataInner: any) => {
