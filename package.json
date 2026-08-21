@@ -20,6 +20,7 @@
     "test:stage4:watch": "vitest --config vitest.stage4.config.ts",
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "test:smoke:watch": "vitest --config vitest.smoke.config.ts",
+    "check:sync": "node scripts/check-architecture-sync.cjs",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {

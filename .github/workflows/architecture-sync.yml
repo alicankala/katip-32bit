@@ -1,0 +1,24 @@
+name: Architecture sync
+
+on:
+  push:
+    branches:
+      - master
+      - 'test/**'
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  compare:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: katip-32bit
+      - uses: actions/checkout@v4
+        with:
+          repository: alicankala/katip-64bit
+          ref: master
+          path: katip-64bit
+      - run: node katip-32bit/scripts/check-architecture-sync.cjs --current katip-32bit --peer katip-64bit
