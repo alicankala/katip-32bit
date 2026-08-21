@@ -5,7 +5,7 @@
   Ne yapar:
     1. Çalışma dizininde kaydedilmemiş değişiklik var mı bakar
     2. package.json'daki sürümün GitHub'da zaten yayınlanmadığını doğrular
-    3. npm run build ile kurulum dosyasını üretir
+    3. npm run build -- --publish never ile kurulum dosyasını üretir
     4. latest.yml içindeki dosya adının gerçek dosyayla eşleştiğini doğrular
        (uyuşmazsa otomatik güncelleme sessizce çalışmaz - 1.0.0/1.0.1'de bu oldu)
     5. TASLAK release oluşturur; taslağı güncelleyiciler görmez
@@ -98,7 +98,7 @@ try {
 if (-not $AtlaBuild) {
   Write-Host ""
   Write-Host "Derleniyor (birkac dakika surer)..." -ForegroundColor White
-  npm run build
+  npm run build -- --publish never
   if ($LASTEXITCODE -ne 0) { Vazgec "Derleme basarisiz." }
   Basarili "Derleme tamam"
 }

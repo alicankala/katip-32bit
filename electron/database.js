@@ -342,7 +342,8 @@ migrationCalistir(9, () => {
     `).run(usta.name, hashPin(usta.pin), 1, usta.name)
 
     if (eklendi.changes > 0) {
-      console.log(`[Kâtip] "${usta.name}" için başlangıç PIN'i ayarlandı: ${usta.pin} (Ayarlar'dan değiştirilmesi önerilir.)`)
+      // PIN değeri destek loguna hiçbir koşulda yazılmaz.
+      console.log('[Kâtip] Bir usta için başlangıç PIN hash kaydı oluşturuldu; Ayarlar bölümünden değiştirilmesi önerilir.')
     }
   }
 })

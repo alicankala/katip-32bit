@@ -15,6 +15,29 @@ import { destekModundaYasakMi, DESTEK_ENGEL_MESAJI } from './permissions.js'
 log.initialize()
 log.transports.file.level = 'info'
 
+// Yalnız yerel log: telemetry/crash upload yoktur. Monitor olayı Node'un normal
+// çökme davranışını değiştirmeden, kapanmadan önce tanı izi bırakır.
+process.on('uncaughtExceptionMonitor', (error, origin) => {
+  log.error('[CrashDiagnostic] Yakalanmamış ana süreç hatası.', { origin, error })
+})
+
+app.on('render-process-gone', (_event, webContents, details) => {
+  log.error('[CrashDiagnostic] Renderer süreci kapandı.', {
+    webContentsId: webContents.id,
+    reason: details.reason,
+    exitCode: details.exitCode
+  })
+})
+
+app.on('child-process-gone', (_event, details) => {
+  log.error('[CrashDiagnostic] Electron alt süreci kapandı.', {
+    type: details.type,
+    reason: details.reason,
+    exitCode: details.exitCode,
+    serviceName: details.serviceName || ''
+  })
+})
+
 // Fotoğraf protokolünün ayrıcalıkları app 'ready' olmadan önce tanıtılmalıdır.
 fotografSemasiniTanimla()
 
@@ -120,6 +143,14 @@ function createWindow() {
 
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', new Date().toLocaleString())
+  })
+
+  win.webContents.on('unresponsive', () => {
+    log.warn('[CrashDiagnostic] Renderer yanıt vermiyor.', { webContentsId: win?.webContents.id })
+  })
+
+  win.webContents.on('responsive', () => {
+    log.info('[CrashDiagnostic] Renderer yeniden yanıt veriyor.', { webContentsId: win?.webContents.id })
   })
 
   win.on('maximize', () => {
