@@ -230,6 +230,18 @@ describe('Aşama 4 yedek, restore ve telefon API entegrasyonu', () => {
     expect(report.phoneMutation.oversizedAfter).toBe(report.phoneMutation.oversizedBefore)
   })
 
+  it('aktif tahsilatın altına düşürecek mobil kalem silmeyi tamamen geri alır', () => {
+    expect(report.phonePaymentFloor.addResponse.json.success).toBe(true)
+    expect(report.phonePaymentFloor.before.order.total_price).toBe(100)
+    expect(report.phonePaymentFloor.before.stock.stock).toBe(8)
+    expect(report.phonePaymentFloor.before.payment).toMatchObject({ count: 1, total: 100 })
+    expect(report.phonePaymentFloor.before.movements).toHaveLength(1)
+    expect(report.phonePaymentFloor.deleteResponse.status).toBe(200)
+    expect(report.phonePaymentFloor.deleteResponse.json.success).toBe(false)
+    expect(report.phonePaymentFloor.deleteResponse.json.error).toMatch(/ödemelerin altına düşürülemez/i)
+    expect(report.phonePaymentFloor.after).toEqual(report.phonePaymentFloor.before)
+  })
+
   it('fotoğraf kökü içindeki dosyayı yetkili oturuma sunar', () => {
     expect(report.phonePhoto.insideStatus).toBe(200)
     expect(report.phonePhoto.insideHash).toBe(report.phonePhoto.expectedInsideHash)

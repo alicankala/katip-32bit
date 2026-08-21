@@ -356,6 +356,57 @@ async function calistir(): Promise<void> {
       oversizedAfter
     }
 
+    const paymentFloorPart = db.prepare(`
+      INSERT INTO parts (code, name, stock, buy_price, sell_price, is_active)
+      VALUES (?, ?, ?, ?, ?, 1)
+    `).run('S4-PAY-FLOOR', 'Stage4 payment floor part', 10, 20, 50)
+    const paymentFloorPartId = Number(paymentFloorPart.lastInsertRowid)
+    const paymentFloorAdd = await request('POST', '/api/work-order-items/part', JSON.stringify({
+      work_order_id: apiWorkOrderId,
+      part_id: paymentFloorPartId,
+      description: 'Payment floor regression part',
+      quantity: 2,
+      unit_price: 50
+    }), authHeaders)
+    const paymentFloorItem = db.prepare(`
+      SELECT id FROM work_order_items
+      WHERE work_order_id = ? AND part_id = ?
+    `).get(apiWorkOrderId, paymentFloorPartId) as DbRow
+    const paymentFloorItemId = Number(paymentFloorItem.id)
+    db.prepare(`
+      INSERT INTO work_order_payments
+        (work_order_id, amount, payment_method, payment_date, received_by, note)
+      VALUES (?, 100, 'Nakit', date('now', 'localtime'), ?, ?)
+    `).run(apiWorkOrderId, visibleMasterId, 'Stage4 mobile payment floor fixture')
+    const paymentFloorSnapshot = () => ({
+      order: db.prepare('SELECT total_price FROM work_orders WHERE id = ?').get(apiWorkOrderId),
+      item: db.prepare(`
+        SELECT id, work_order_id, part_id, quantity, total_price
+        FROM work_order_items WHERE id = ?
+      `).get(paymentFloorItemId),
+      stock: db.prepare('SELECT stock FROM parts WHERE id = ?').get(paymentFloorPartId),
+      payment: db.prepare(`
+        SELECT COUNT(*) AS count, COALESCE(SUM(amount), 0) AS total
+        FROM work_order_payments
+        WHERE work_order_id = ? AND IFNULL(is_cancelled, 0) = 0
+      `).get(apiWorkOrderId),
+      movements: db.prepare(`
+        SELECT type, quantity, old_stock, new_stock
+        FROM stock_movements WHERE part_id = ? ORDER BY id
+      `).all(paymentFloorPartId)
+    })
+    const paymentFloorBefore = paymentFloorSnapshot()
+    const paymentFloorDelete = await request('POST', '/api/work-order-items/delete', JSON.stringify({
+      item_id: paymentFloorItemId
+    }), authHeaders)
+    const paymentFloorAfter = paymentFloorSnapshot()
+    report.phonePaymentFloor = {
+      addResponse: paymentFloorAdd,
+      deleteResponse: paymentFloorDelete,
+      before: paymentFloorBefore,
+      after: paymentFloorAfter
+    }
+
     const insidePhoto = Buffer.from('stage4-api-photo')
     const insidePhotoPath = join(photosDir, 'stage4-api-photo.jpg')
     const outsidePhotoPath = join(scenarioRoot, 'outside-photo-secret.jpg')

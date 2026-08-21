@@ -8,6 +8,7 @@ import db from './database.js'
 import { fotografiBufferdanKucult } from './photoUtils.js'
 import { hashPin, verifyPin } from './security'
 import { gunSonuVerisiHesapla, bugununTarihi, kapaliGunKontrol } from './controllers/closingController.js'
+import { isEmriToplaminiGuncelle } from './controllers/workOrderController.js'
 import { isRestoreInProgress } from './restoreState.js'
 
 // PrimeIcons artık harici bir CDN'den (unpkg) değil, uygulamayla birlikte gelen
@@ -411,20 +412,6 @@ export function stopPhoneServer(): Promise<boolean> {
 }
 
 // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ DATABASE HELPERS FOR WORK ORDERS & STOCKS Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-
-function isEmriToplaminiGuncelle(workOrderId: number | string): void {
-  const toplam = db.prepare(`
-    SELECT COALESCE(SUM(total_price), 0) AS toplam
-    FROM work_order_items
-    WHERE work_order_id = ?
-  `).get(Number(workOrderId)) as any
-
-  db.prepare(`
-    UPDATE work_orders
-    SET total_price = ?
-    WHERE id = ?
-  `).run(Number(toplam?.toplam || 0), Number(workOrderId))
-}
 
 function stokHareketiKaydet(veri: {
   partId: number
