@@ -9,6 +9,9 @@
     "dev": "vite",
     "build": "vue-tsc && vite build && electron-builder",
     "preview": "vite preview",
+    "test": "vitest run --config vitest.config.ts",
+    "test:unit": "vitest run --config vitest.config.ts",
+    "test:unit:watch": "vitest --config vitest.config.ts",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
@@ -36,6 +39,7 @@
     "vite": "^5.1.6",
     "vite-plugin-electron": "^0.28.6",
     "vite-plugin-electron-renderer": "^0.14.5",
+    "vitest": "2.1.9",
     "vue-tsc": "^2.0.26"
   },
   "main": "dist-electron/main.js"
