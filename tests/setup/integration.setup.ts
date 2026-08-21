@@ -28,7 +28,7 @@ afterAll(() => {
     throw new Error(`[KATIP_INTEGRATION_TEMP_GUARD] Guvensiz silme hedefi reddedildi: ${testRoot}`)
   }
 
-  rmSync(testRoot, { recursive: true, force: true })
+  rmSync(testRoot, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 })
 
   if (process.env.KATIP_INTEGRATION_TEST_ROOT === testRoot) {
     delete process.env.KATIP_INTEGRATION_TEST_ROOT
