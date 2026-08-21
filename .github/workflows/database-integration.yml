@@ -19,6 +19,7 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      - run: npm run check:win7-contract
       - run: npx vue-tsc --noEmit
       - run: npm run test:unit
       # Build, better-sqlite3 native modulunu Electron 22 ABI v110 + ia32 icin

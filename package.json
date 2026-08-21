@@ -21,6 +21,7 @@
     "test:smoke": "vitest run --config vitest.smoke.config.ts",
     "test:smoke:watch": "vitest --config vitest.smoke.config.ts",
     "check:sync": "node scripts/check-architecture-sync.cjs",
+    "check:win7-contract": "node scripts/check-win7-contract.cjs",
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
