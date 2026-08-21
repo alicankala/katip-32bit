@@ -3,7 +3,11 @@ import db, { dbPath, uygulamaVerileriniYenileBackend, ayarlariGetirBackend } fro
 import { app, BrowserWindow, dialog, shell } from 'electron'
 import fsSync, { promises as fs } from 'node:fs'
 import path from 'node:path'
-import AdmZip from 'adm-zip'
+// Arsivleme/cikarma AKIS tabanli yapiliyor (bkz. zipArsiviOlustur notu).
+// yazl ve yauzl saf JavaScript; Windows 7 icin sart olan tar.exe bagimsizligini
+// korurken adm-zip gibi her seyi bellege almiyorlar.
+import { ZipFile } from 'yazl'
+import { open as yauzlOpen } from 'yauzl'
 import { isRestoreInProgress, setRestoreInProgress } from '../restoreState.js'
 
 // better-sqlite3 doğrudan ESM import ile yüklenirse Vite'in derlediği main
@@ -95,58 +99,96 @@ function yedekDosyaAdiOlustur(tur: YedekTuru, stamp: string): string {
   return `katip-tam-yedek-${stamp}.zip`
 }
 
+// Bir klasördeki tüm dosyaları, arşiv içindeki göreli adlarıyla listeler.
+async function klasorDosyalariniListele(
+  rootDir: string,
+  arsivOneki: string
+): Promise<Array<{ diskYolu: string; arsivYolu: string }>> {
+  const sonuc: Array<{ diskYolu: string; arsivYolu: string }> = []
+  if (!(await yolVarMi(rootDir))) return sonuc
+
+  const girdiler = await fs.readdir(rootDir, { withFileTypes: true })
+  for (const girdi of girdiler) {
+    const diskYolu = path.join(rootDir, girdi.name)
+    // Arşiv içi ayraç her zaman '/' olmalı (zip standardı).
+    const arsivYolu = arsivOneki + '/' + girdi.name
+    if (girdi.isDirectory()) {
+      sonuc.push(...(await klasorDosyalariniListele(diskYolu, arsivYolu)))
+    } else if (girdi.isFile()) {
+      sonuc.push({ diskYolu, arsivYolu })
+    }
+  }
+  return sonuc
+}
+
+// Arşivi AKIŞ hâlinde üretir; hiçbir aşamada tüm fotoğraflar belleğe alınmaz.
+//
+// Eski hâli iki soruna yol açıyordu:
+//   1. Bütün fotoğraf klasörü önce geçici bir hazırlık klasörüne kopyalanıp
+//      sonra o kopya sıkıştırılıyordu; yani her yedekte fotoğraflar diske iki
+//      kez yazılıyor ve o kadar da boş alan gerekiyordu.
+//   2. adm-zip her dosyayı readFileSync ile belleğe alıp arşivi tamamen
+//      bellekte kuruyordu. 32-bit süreçte kullanılabilir adres alanı sert bir
+//      tavanla sınırlı olduğu için, fotoğraf sayısı arttıkça yedekleme
+//      yavaşlamıyor, doğrudan BAŞARISIZ oluyordu -- hem de tam yedeğe en çok
+//      ihtiyaç duyulan anda.
+//
+// yazl dosyaları diskten akış hâlinde okuyup doğrudan çıktı akışına yazar;
+// bellekte yalnızca küçük bir tampon tutulur. tar.exe hâlâ KULLANILMIYOR:
+// Windows 7'de yok (bkz. sürüm 1.4.1). yazl saf JavaScript'tir.
+//
+// Arşivin yapısı değişmedi: database/otoservis.db + fotograflar/ + manifest.json
 async function zipArsiviOlustur(
   zipPath: string,
   databaseSnapshotPath: string,
   photosDir: string,
   manifest: Record<string, unknown>
 ): Promise<void> {
-  const packageRoot = await fs.mkdtemp(path.join(app.getPath('temp'), 'katip-zip-stage-'))
+  await fs.mkdir(path.dirname(zipPath), { recursive: true })
+  await fs.rm(zipPath, { force: true })
 
-  try {
-    const databaseDir = path.join(packageRoot, 'database')
-    const packagePhotosDir = path.join(packageRoot, 'fotograflar')
+  const zip = new ZipFile()
 
-    await fs.mkdir(databaseDir, { recursive: true })
-    await fs.mkdir(packagePhotosDir, { recursive: true })
-    await fs.copyFile(databaseSnapshotPath, path.join(databaseDir, 'otoservis.db'))
+  // 1) Veritabanı anlık görüntüsü (geçici dosyadan doğrudan, kopyalanmadan)
+  zip.addFile(databaseSnapshotPath, 'database/otoservis.db')
 
-    if (await yolVarMi(photosDir)) {
-      await fs.cp(photosDir, packagePhotosDir, { recursive: true, force: true })
+  // 2) Fotoğraflar, durdukları yerden doğrudan
+  const fotograflar = await klasorDosyalariniListele(photosDir, 'fotograflar')
+  if (fotograflar.length > 0) {
+    for (const f of fotograflar) {
+      zip.addFile(f.diskYolu, f.arsivYolu)
     }
-
-    await fs.writeFile(
-      path.join(packageRoot, 'manifest.json'),
-      JSON.stringify(manifest, null, 2),
-      'utf8'
-    )
-
-    await fs.mkdir(path.dirname(zipPath), { recursive: true })
-    await fs.rm(zipPath, { force: true })
-
-    // Arşivleme bilerek adm-zip (saf JavaScript) ile yapılıyor, Windows'un
-    // tar.exe'si ile DEĞİL: tar.exe Windows'a ancak Windows 10 build 17063 ile
-    // geldi, Windows 7'de yok. tar.exe kullanıldığında Windows 7'de yedekleme,
-    // geri yükleme ve (önce güvenlik yedeği aldığı için) sıfırlama sessizce
-    // başarısız oluyordu. İşletim sistemine bağımlı bir araç kullanmayın.
-    const zip = new AdmZip()
-    zip.addLocalFolder(databaseDir, 'database')
-
-    // Boş klasörleri addLocalFolder atlıyor; geri yükleme 'fotograflar'
-    // klasörünü beklediği için boşsa açık bir klasör girdisi ekleniyor
-    // (tar.exe'nin ürettiği yapı da böyleydi).
-    const fotografDosyalari = await fs.readdir(packagePhotosDir)
-    if (fotografDosyalari.length > 0) {
-      zip.addLocalFolder(packagePhotosDir, 'fotograflar')
-    } else {
-      zip.addFile('fotograflar/', Buffer.alloc(0))
-    }
-
-    zip.addLocalFile(path.join(packageRoot, 'manifest.json'))
-    await zip.writeZipPromise(zipPath)
-  } finally {
-    await fs.rm(packageRoot, { recursive: true, force: true })
+  } else {
+    // Geri yükleme 'fotograflar' klasörünü beklediği için, hiç fotoğraf yoksa
+    // açık bir klasör girdisi eklenir (eski paketlerdeki yapıyla aynı).
+    zip.addEmptyDirectory('fotograflar')
   }
+
+  // 3) Manifest (küçük olduğu için bellekten)
+  zip.addBuffer(Buffer.from(JSON.stringify(manifest, null, 2), 'utf8'), 'manifest.json')
+
+  zip.end()
+
+  // Çıktıyı diske akıt ve tamamlanmasını bekle.
+  await new Promise<void>((resolve, reject) => {
+    const cikis = fsSync.createWriteStream(zipPath)
+    let bitti = false
+    const hataVer = (err: unknown) => {
+      if (bitti) return
+      bitti = true
+      reject(err instanceof Error ? err : new Error(String(err)))
+    }
+
+    zip.outputStream.on('error', hataVer)
+    cikis.on('error', hataVer)
+    cikis.on('close', () => {
+      if (bitti) return
+      bitti = true
+      resolve()
+    })
+
+    zip.outputStream.pipe(cikis)
+  })
 }
 
 export async function tamYedekPaketiOlustur(tur: YedekTuru): Promise<TamYedekSonucu> {
@@ -250,29 +292,96 @@ export async function sonOtomatikYedekZamaniGetir(): Promise<number> {
   return newestTime
 }
 
-async function zipPaketiniGuvenliCikart(zipPath: string, targetDir: string): Promise<void> {
-  // Çıkarma da adm-zip ile yapılıyor; gerekçesi zipArsiviOlustur'daki notta:
-  // tar.exe Windows 7'de yok. Yol doğrulaması (zip slip koruması) korunuyor.
-  const zip = new AdmZip(zipPath)
-  const root = path.resolve(targetDir)
+// Bir arşiv girdisinin hedef klasör dışına çıkmadığını doğrular (zip slip).
+// Güvenli ise diskte yazılacak tam yolu, değilse hata döndürür.
+function arsivGirdisiniDogrula(entryName: string, root: string): string {
+  const normalizedEntryPath = String(entryName || '').replace(/\\/g, '/')
+  const parts = normalizedEntryPath.split('/').filter(Boolean)
 
-  for (const entry of zip.getEntries()) {
-    const normalizedEntryPath = String(entry.entryName || '').replace(/\\/g, '/')
-    const parts = normalizedEntryPath.split('/').filter(Boolean)
-
-    if (!normalizedEntryPath || normalizedEntryPath.startsWith('/') ||
-        /^[a-zA-Z]:/.test(normalizedEntryPath) || parts.includes('..')) {
-      throw new Error(`Yedek paketinde güvenli olmayan dosya yolu var: ${normalizedEntryPath}`)
-    }
-
-    const outputPath = path.resolve(root, ...parts)
-    if (outputPath !== root && !outputPath.startsWith(root + path.sep)) {
-      throw new Error(`Yedek paketinde geçersiz dosya yolu var: ${normalizedEntryPath}`)
-    }
+  if (!normalizedEntryPath || normalizedEntryPath.startsWith('/') ||
+      /^[a-zA-Z]:/.test(normalizedEntryPath) || parts.includes('..')) {
+    throw new Error(`Yedek paketinde güvenli olmayan dosya yolu var: ${normalizedEntryPath}`)
   }
 
+  const outputPath = path.resolve(root, ...parts)
+  if (outputPath !== root && !outputPath.startsWith(root + path.sep)) {
+    throw new Error(`Yedek paketinde geçersiz dosya yolu var: ${normalizedEntryPath}`)
+  }
+
+  return outputPath
+}
+
+// Arşivi AKIŞ hâlinde çıkarır; hiçbir aşamada tüm paket belleğe alınmaz.
+//
+// Eski hâli adm-zip ile arşivin tamamını belleğe okuyordu (bkz. zipArsiviOlustur
+// üstündeki not): 32-bit süreçte fotoğraflı büyük bir yedeği GERİ YÜKLEMEK de
+// bellek tavanına takılabiliyordu. yauzl girdileri tek tek akıtır.
+//
+// tar.exe hâlâ KULLANILMIYOR (Windows 7'de yok). Yol doğrulaması (zip slip
+// koruması) aynen korunuyor ve çıkarma başlamadan ÖNCE tüm girdiler denetleniyor.
+async function zipPaketiniGuvenliCikart(zipPath: string, targetDir: string): Promise<void> {
+  const root = path.resolve(targetDir)
   await fs.mkdir(targetDir, { recursive: true })
-  zip.extractAllTo(targetDir, true)
+
+  await new Promise<void>((resolve, reject) => {
+    yauzlOpen(zipPath, { lazyEntries: true }, (err: any, zipfile: any) => {
+      if (err || !zipfile) {
+        reject(err instanceof Error ? err : new Error('Yedek paketi açılamadı.'))
+        return
+      }
+
+      let bitti = false
+      const hataVer = (e: unknown) => {
+        if (bitti) return
+        bitti = true
+        try { zipfile.close() } catch { /* zaten kapanmış olabilir */ }
+        reject(e instanceof Error ? e : new Error(String(e)))
+      }
+
+      zipfile.on('error', hataVer)
+      zipfile.on('end', () => {
+        if (bitti) return
+        bitti = true
+        resolve()
+      })
+
+      zipfile.on('entry', (entry: any) => {
+        let hedefYol: string
+        try {
+          hedefYol = arsivGirdisiniDogrula(entry.fileName, root)
+        } catch (e) {
+          hataVer(e)
+          return
+        }
+
+        // Klasör girdisi (adı '/' ile biter): yalnızca oluştur, sonrakine geç.
+        if (/\/$/.test(entry.fileName)) {
+          fs.mkdir(hedefYol, { recursive: true })
+            .then(() => zipfile.readEntry())
+            .catch(hataVer)
+          return
+        }
+
+        fs.mkdir(path.dirname(hedefYol), { recursive: true })
+          .then(() => {
+            zipfile.openReadStream(entry, (streamErr: any, okuma: any) => {
+              if (streamErr || !okuma) {
+                hataVer(streamErr || new Error('Arşiv girdisi okunamadı: ' + entry.fileName))
+                return
+              }
+              const yazma = fsSync.createWriteStream(hedefYol)
+              okuma.on('error', hataVer)
+              yazma.on('error', hataVer)
+              yazma.on('close', () => zipfile.readEntry())
+              okuma.pipe(yazma)
+            })
+          })
+          .catch(hataVer)
+      })
+
+      zipfile.readEntry()
+    })
+  })
 }
 
 export async function otomatikYedekAlBackend(): Promise<TamYedekSonucu> {
