@@ -249,6 +249,20 @@ async function calistir(): Promise<void> {
       hashes: { small: sha256(smallPhoto), large: sha256(largePhoto) }
     }
 
+    const updateBackupResult = await backupModule.guncellemeOncesiYedekAlBackend()
+    if (!updateBackupResult.success || !updateBackupResult.path) {
+      throw new Error(updateBackupResult.error || 'Guncelleme oncesi tam yedek olusturulamadi.')
+    }
+    const customerAfterUpdateBackup = db.prepare('SELECT name, phone, note, is_active FROM customers WHERE id = ?')
+      .get(customerId)
+    report.updateBackup = {
+      result: updateBackupResult,
+      archiveInsideScenario: testKokuIcindeMi(updateBackupResult.path, scenarioRoot),
+      filename: basename(updateBackupResult.path),
+      customerAfterBackup: customerAfterUpdateBackup,
+      quickCheck: String(db.pragma('quick_check', { simple: true }))
+    }
+
     db.prepare('UPDATE app_settings SET value = ? WHERE key = ?').run('mutated', 'stage4_backup_marker')
     db.prepare('UPDATE customers SET name = ? WHERE id = ?').run('Stage4 Mutated Customer', customerId)
     await fs.rm(photosDir, { recursive: true, force: true })

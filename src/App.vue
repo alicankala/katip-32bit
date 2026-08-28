@@ -1070,7 +1070,7 @@ v-for="item in menuItems.slice(6, 9)"
     <div class="update-bar-texts">
       <template v-if="guncelleme.durum === 'hazir'">
         <strong>Yeni sürüm hazır{{ guncelleme.surum ? ` (${guncelleme.surum})` : '' }}</strong>
-        <span>Programı kapatıp açtığınızda kendiliğinden kurulacak.</span>
+        <span>Kurulumdan önce müşteri kayıtları ve fotoğraflar güvenli biçimde yedeklenecek.</span>
       </template>
       <template v-else>
         <strong>Yeni sürüm indiriliyor{{ guncelleme.surum ? ` (${guncelleme.surum})` : '' }}</strong>

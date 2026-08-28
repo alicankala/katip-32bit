@@ -38,7 +38,7 @@ export function fotograflarKlasoruYoluGetir(): string {
   return path.join(app.getPath('userData'), 'fotograflar')
 }
 
-type YedekTuru = 'manual' | 'automatic' | 'pre-restore' | 'pre-reset'
+type YedekTuru = 'manual' | 'automatic' | 'pre-update' | 'pre-restore' | 'pre-reset'
 
 export interface TamYedekSonucu {
   success: boolean
@@ -94,6 +94,7 @@ async function klasorOzetiGetir(rootDir: string): Promise<{ count: number; bytes
 
 function yedekDosyaAdiOlustur(tur: YedekTuru, stamp: string): string {
   if (tur === 'automatic') return `otoservis_auto_backup_${stamp}.zip`
+  if (tur === 'pre-update') return `guncelleme-oncesi-tam-yedek-${stamp}.zip`
   if (tur === 'pre-restore') return `geri-yukleme-oncesi-tam-yedek-${stamp}.zip`
   if (tur === 'pre-reset') return `sifirlama-oncesi-tam-yedek-${stamp}.zip`
   return `katip-tam-yedek-${stamp}.zip`
@@ -391,6 +392,13 @@ export async function otomatikYedekAlBackend(): Promise<TamYedekSonucu> {
     catch (error) { console.warn('[AutoBackup] Saklama temizliği yapılamadı:', error) }
   }
   return result
+}
+
+// Güncelleme kurulumu başlamadan hemen önce alınır. Otomatik yedek saklama
+// sınırına dahil edilmez; böylece kullanıcı yeni sürümde sorun yaşarsa kurulum
+// öncesindeki veritabanı ve fotoğraflar ayrıca korunur.
+export async function guncellemeOncesiYedekAlBackend(): Promise<TamYedekSonucu> {
+  return await tamYedekPaketiOlustur('pre-update')
 }
 
 let otomatikYedekTimer: ReturnType<typeof setInterval> | null = null

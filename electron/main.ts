@@ -4,6 +4,7 @@ import path from 'node:path'
 import log from 'electron-log/main'
 import { autoUpdater } from 'electron-updater'
 import { NodeHttpExecutor } from './nodeHttpExecutor.js'
+import { disAdresMi, yeniPencereKarari } from './windowOpenPolicy.js'
 import { runPhoneServerMigrations } from './phoneServer.js'
 import { isRestoreInProgress } from './restoreState.js'
 import { fotografSemasiniTanimla, fotografProtokolunuKaydet } from './photoProtocol.js'
@@ -54,7 +55,8 @@ import { registerMarketHandlers } from './controllers/marketController.js'
 import {
   registerBackupHandlers,
   otomatikYedekZamanlayicisiniBaslat,
-  otomatikYedekAlBackend
+  otomatikYedekAlBackend,
+  guncellemeOncesiYedekAlBackend
 } from './controllers/backupController.js'
 
 // Paket CommonJS olarak üretiliyor (bkz. package.json'da "type" alanının olmaması):
@@ -118,17 +120,30 @@ function createWindow() {
     }
   })
 
-  // Uygulama tek pencerede çalışır ve yalnızca kendi yerel arayüzünü yükler.
-  // Aşağıdaki iki koruma, beklenmedik bir bağlantının (ör. arayüze bir şekilde
-  // sızmış bir adres) kendi penceresini açmasını ya da ana pencereyi dış bir
-  // siteye götürmesini engeller. Dış adresler sistem tarayıcısına yönlendirilir.
-  const disAdresMi = (url: string) => /^https?:\/\//i.test(url)
-
+  // Uygulama yalnızca kendi yerel arayüzünü ve HTML'i renderer tarafından
+  // doldurulan boş yazdırma pencerelerini açar. Uzak adresler uygulamaya
+  // yüklenmez; sistem tarayıcısına yönlendirilir.
   win.webContents.setWindowOpenHandler(({ url }) => {
+    const karar = yeniPencereKarari(url)
+    if (karar.action === 'allow') return karar
     if (disAdresMi(url)) {
       void shell.openExternal(url)
     }
-    return { action: 'deny' }
+    return karar
+  })
+
+  // Yazdırma penceresinin kendisinden yeni bir pencere zinciri açılamaz.
+  // Bir HTTP(S) bağlantısı eklenirse yalnızca varsayılan tarayıcıya gider.
+  win.webContents.on('did-create-window', (yeniPencere) => {
+    yeniPencere.webContents.setWindowOpenHandler(({ url }) => {
+      if (disAdresMi(url)) void shell.openExternal(url)
+      return { action: 'deny' }
+    })
+
+    yeniPencere.webContents.on('will-navigate', (event, url) => {
+      event.preventDefault()
+      if (disAdresMi(url)) void shell.openExternal(url)
+    })
   })
 
   win.webContents.on('will-navigate', (event, url) => {
@@ -287,6 +302,7 @@ function guncellemeHatasiniCevir(error: unknown): { mesaj: string; internetYok: 
 
 let guncellemeDurumu: GuncellemeDurumu = { durum: 'bilinmiyor' }
 let guncellemeDinleyicileriKuruldu = false
+let guncellemeKuruluyor = false
 
 function guncellemeDurumunuYayinla(yeni: GuncellemeDurumu): void {
   guncellemeDurumu = yeni
@@ -308,6 +324,10 @@ function guncellemeDinleyicileriniKur(): void {
 
   autoUpdater.logger = log
   autoUpdater.autoDownload = true
+  // İndirilen paket normal uygulama çıkışında kendiliğinden kurulmaz. Kurulum
+  // yalnız guncellemeyi-kur IPC akışından, güncelleme öncesi tam yedek başarıyla
+  // tamamlandıktan sonra quitAndInstall ile başlatılır.
+  autoUpdater.autoInstallOnAppQuit = false
 
   autoUpdater.on('checking-for-update', () => {
     guncellemeDurumunuYayinla({ durum: 'denetleniyor' })
@@ -337,6 +357,10 @@ function guncellemeDinleyicileriniKur(): void {
     // Ham hata log dosyasına gider (Ayarlar → Log Klasörünü Aç), arayüze sadeleştirilmiş hâli.
     console.error('Güncelleme hatası:', err)
     const { mesaj, internetYok } = guncellemeHatasiniCevir(err)
+    if (guncellemeKuruluyor) {
+      guncellemeKuruluyor = false
+      isQuitting = false
+    }
     guncellemeDurumunuYayinla({ durum: 'hata', hata: mesaj, internetYok })
   })
 }
@@ -416,19 +440,53 @@ function ipcKopruleriniKur() {
     }
   })
 
-  kanalEkle('guncellemeyi-kur', () => {
+  kanalEkle('guncellemeyi-kur', async () => {
     if (guncellemeDurumu.durum !== 'hazir') {
       return { success: false, error: 'Kurulmaya hazır bir güncelleme yok.' }
     }
 
-    // quitAndInstall uygulamayı kapatır; kapanışta alınan yedek 'before-quit'
-    // içinde çalışmaya devam eder, kurulum uygulama kapanana kadar bekler.
-    // setImmediate içinde yakalanmayan bir hata, Electron'un İngilizce
-    // "A JavaScript error occurred in the main process" kutusunu açardı.
+    if (guncellemeKuruluyor) {
+      return { success: false, error: 'Güncelleme kurulumu zaten hazırlanıyor.' }
+    }
+
+    guncellemeKuruluyor = true
+
+    // Müşteri kayıtları yerinde değiştirilmez. Kurulumdan önce SQLite'ın tutarlı
+    // anlık görüntüsü ve fotoğraflar ayrı bir ZIP'e kopyalanır. Yedek alınamazsa
+    // kurulum hiç başlatılmaz ve mevcut sürüm çalışmaya devam eder.
+    let yedekSonucu
+    try {
+      yedekSonucu = await guncellemeOncesiYedekAlBackend()
+    } catch (error) {
+      console.error('[UpdateInstall] Güncelleme öncesi yedek hatası:', error)
+      guncellemeKuruluyor = false
+      return {
+        success: false,
+        error: 'Güncelleme kurulmadı: güvenlik yedeği alınamadı. Diskte boş alan olduğunu kontrol edin.'
+      }
+    }
+
+    if (!yedekSonucu.success) {
+      console.error('[UpdateInstall] Güncelleme öncesi yedek alınamadı:', yedekSonucu.error)
+      guncellemeKuruluyor = false
+      return {
+        success: false,
+        error: `Güncelleme kurulmadı: güvenlik yedeği alınamadı. (${yedekSonucu.error || 'bilinmeyen hata'})`
+      }
+    }
+
+    console.log('[UpdateInstall] Güncelleme öncesi tam yedek hazır:', yedekSonucu.path)
+
+    // Yedek zaten tamamlandı. before-quit içindeki isteğe bağlı çıkış yedeğini
+    // ikinci kez çalıştırmadan kurucuyu başlat; böylece NSIS ile asenkron yedek
+    // birbirinin uygulamanın kapanmasını beklediği bir yarış oluşmaz.
     setImmediate(() => {
       try {
+        isQuitting = true
         autoUpdater.quitAndInstall()
       } catch (error) {
+        isQuitting = false
+        guncellemeKuruluyor = false
         console.error('Güncelleme kurulum hatası:', error)
         guncellemeDurumunuYayinla({
           durum: 'hata',
@@ -436,7 +494,7 @@ function ipcKopruleriniKur() {
         })
       }
     })
-    return { success: true }
+    return { success: true, backupCreated: true }
   })
 
   // Tüm IPC controller kaydı

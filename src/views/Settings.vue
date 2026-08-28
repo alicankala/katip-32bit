@@ -48,7 +48,7 @@ const guncellemeDurumMetni = computed(() => {
     case 'denetleniyor': return 'Yeni sürüm denetleniyor...'
     case 'guncel': return 'Programınız güncel.'
     case 'indiriliyor': return `Yeni sürüm indiriliyor: %${d.yuzde || 0}`
-    case 'hazir': return `Sürüm ${d.surum || ''} indirildi. Yeniden başlatınca kurulacak.`
+    case 'hazir': return `Sürüm ${d.surum || ''} indirildi. Güvenli yedekle kurmak için "Şimdi Yeniden Başlat" düğmesine basın.`
     // Metin main process'te Türkçeleştiriliyor; ham İngilizce hata yalnızca log dosyasına yazılır.
     case 'hata': return d.hata || 'Güncelleme denetlenemedi. İnternet bağlantısını kontrol edin.'
     default: return 'Son denetim yapılmadı.'

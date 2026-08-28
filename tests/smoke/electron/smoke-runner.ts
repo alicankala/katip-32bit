@@ -91,6 +91,7 @@ async function calistir(): Promise<void> {
   const sessionModule = await import('../../../electron/session.js')
   const permissionsModule = await import('../../../electron/permissions.js')
   const restoreStateModule = await import('../../../electron/restoreState.js')
+  const windowOpenPolicyModule = await import('../../../electron/windowOpenPolicy.js')
 
   if (realpathSync(dirname(databaseModule.dbPath)) !== scenarioRoot) {
     throw new Error(`[KATIP_SMOKE_TEMP_GUARD] Veritabani test dizini disinda: ${databaseModule.dbPath}`)
@@ -153,6 +154,17 @@ async function calistir(): Promise<void> {
       preload: preloadPath
     }
   })
+  let printWindow: BrowserWindow | null = null
+  let createdWindowCount = 0
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    console.log(`[SMOKE] window-open-request ${url}`)
+    return windowOpenPolicyModule.yeniPencereKarari(url)
+  })
+  win.webContents.on('did-create-window', (createdWindow) => {
+    createdWindowCount += 1
+    printWindow = createdWindow
+    createdWindow.hide()
+  })
   win.webContents.on('console-message', (...args: any[]) => {
     const details = args[1]
     const level = typeof details === 'object' ? Number(details.level) : Number(details)
@@ -189,6 +201,36 @@ async function calistir(): Promise<void> {
   console.log('[SMOKE] load-file-resolved')
   await bekle(async () => domReady, 'renderer DOM hazirligi', 5_000)
   console.log(`[SMOKE] renderer-state url=${win.webContents.getURL()} crashed=${win.webContents.isCrashed()}`)
+
+  const printOpenReturnedWindow = await javascriptCalistir(win, `(() => {
+    const popup = window.open('', '_blank')
+    if (!popup) return false
+    popup.document.write('<!doctype html><html><head><title>Katip Print Smoke</title></head><body>print-ready</body></html>')
+    popup.document.close()
+    return true
+  })()`, 'yerel yazdirma penceresi')
+  await bekle(async () => printWindow && !printWindow.isDestroyed(), 'yazdirma penceresinin olusmasi')
+  const printWindowState = JSON.parse(await javascriptCalistir(
+    printWindow!,
+    `JSON.stringify({
+      title: document.title,
+      text: document.body?.innerText || '',
+      hasNodeRequire: typeof window.require === 'function',
+      hasNodeProcess: typeof window.process === 'object'
+    })`,
+    'yazdirma penceresi guvenligi'
+  ))
+  const windowCountBeforeDeniedOpen = createdWindowCount
+  const deniedOpenReturnedWindow = await javascriptCalistir(
+    win,
+    `Boolean(window.open('https://example.invalid', '_blank'))`,
+    'uzak pencere reddi'
+  )
+  await new Promise((resolve) => setTimeout(resolve, 250))
+  const remoteWindowDenied = createdWindowCount === windowCountBeforeDeniedOpen
+  printWindow!.close()
+  printWindow = null
+  console.log('[SMOKE] print-window-policy')
 
   const loginScreen = await bekle(
     () => javascriptCalistir(win, `Boolean(
@@ -293,6 +335,12 @@ async function calistir(): Promise<void> {
       arch: process.arch,
       electron: process.versions.electron,
       preloadFile: basename(preloadPath)
+    },
+    printing: {
+      printOpenReturnedWindow,
+      printWindowState,
+      deniedOpenReturnedWindow,
+      remoteWindowDenied
     },
     loginScreen,
     preloadState,

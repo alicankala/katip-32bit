@@ -147,6 +147,18 @@ describe('Electron kritik akış smoke testi', () => {
     expect(report.loginScreen).toBe(true)
   })
 
+  it('yerel yazdırma penceresini güvenli tercihlerle açıp uzak pencereyi reddeder', () => {
+    expect(report.printing.printOpenReturnedWindow).toBe(true)
+    expect(report.printing.printWindowState).toMatchObject({
+      title: 'Katip Print Smoke',
+      text: 'print-ready',
+      hasNodeRequire: false,
+      hasNodeProcess: false
+    })
+    expect(report.printing.deniedOpenReturnedWindow).toBe(false)
+    expect(report.printing.remoteWindowDenied).toBe(true)
+  })
+
   it('contextBridge API ve temel IPC bağlantısını doğrular', () => {
     expect(report.preloadState).toEqual({
       hasApi: true,

@@ -160,6 +160,19 @@ describe('Aşama 4 yedek, restore ve telefon API entegrasyonu', () => {
     }
   })
 
+  it('güncelleme öncesi tam yedeği müşteri kaydını değiştirmeden oluşturur', () => {
+    expect(report.updateBackup.result.success).toBe(true)
+    expect(report.updateBackup.archiveInsideScenario).toBe(true)
+    expect(report.updateBackup.filename).toMatch(/^guncelleme-oncesi-tam-yedek-.*\.zip$/)
+    expect(report.updateBackup.customerAfterBackup).toMatchObject({
+      name: 'Stage4 Original Customer',
+      phone: '5554000001',
+      note: 'backup fixture',
+      is_active: 1
+    })
+    expect(report.updateBackup.quickCheck).toBe('ok')
+  })
+
   it('bozuk DB yedeğini aktif veri ve fotoğrafı değiştirmeden reddeder', () => {
     expect(report.corruptRestore.result.success).toBe(false)
     expect(report.corruptRestore.marker.value).toBe('mutated')

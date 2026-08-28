@@ -23,6 +23,11 @@ Bu belge release üretmez. Yayın öncesi kontrolleri, eski sürümden güncelle
 8. Installer imzası ve zaman damgası `Get-AuthenticodeSignature` ile kontrol edilir.
 9. Ancak açık yayın onayından sonra release betiği çalıştırılır.
 
+`scripts/yayinla.ps1` imzasız installer'ı varsayılan olarak yayınlamaz. Geçerli
+bir Authenticode sertifikası henüz yoksa `-ImzasizYayinaIzinVer` parametresi
+riski bilinçli olarak kabul eder; bu seçenek SmartScreen/yayıncı uyarısını
+ortadan kaldırmaz.
+
 Hosted GitHub Actions, gerçek Windows 7 testi değildir. x86 güncelleme, native SQLite, kurulum ve veri koruma akışı `WINDOWS7_X86_REAL_DEVICE_TEST.md` ile fiziksel cihazda doğrulanmalıdır.
 
 ## Loglar ve crash teşhisi

@@ -26,7 +26,11 @@ const checks = [
   ['Release build yayın yapmıyor', releaseScript.includes('npm run build -- --publish never')],
   ['Release script doğru repoyu hedefliyor', releaseScript.includes(`$repo = 'alicankala/${expectedRepo}'`)],
   ['Release latest.yml ve blockmap doğruluyor', releaseScript.includes("'latest.yml'") && releaseScript.includes('$blockmap')],
+  ['Release installer boyutunu ve SHA-512 özetini doğruluyor', releaseScript.includes('$manifestBoyut') && releaseScript.includes('$gercekSha')],
+  ['İmzasız müşteri yayını açık izin gerektiriyor', releaseScript.includes('$ImzasizYayinaIzinVer') && releaseScript.includes("Get-AuthenticodeSignature")],
   ['Updater hata ve indirme olaylarını logluyor', main.includes("autoUpdater.on('error'") && main.includes("autoUpdater.on('update-downloaded'")],
+  ['Updater tam yedek atlanarak çıkışta kurulmuyor', main.includes('autoUpdater.autoInstallOnAppQuit = false')],
+  ['Güncelleme kurulmadan önce tam yedek alınıyor', main.includes('await guncellemeOncesiYedekAlBackend()') && main.includes('Güncelleme kurulmadı: güvenlik yedeği alınamadı')],
   ['Yerel crash tanı hookları var', main.includes("process.on('uncaughtExceptionMonitor'") && main.includes("app.on('render-process-gone'")],
   ['Log klasörü kullanıcı tarafından açılabiliyor', settings.includes("kanalEkle('log-klasoru-ac'")],
   ['PIN değeri loglanmıyor', !database.includes('${usta.pin}')]

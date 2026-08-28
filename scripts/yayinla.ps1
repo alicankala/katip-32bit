@@ -6,12 +6,13 @@
     1. Çalışma dizininde kaydedilmemiş değişiklik var mı bakar
     2. package.json'daki sürümün GitHub'da zaten yayınlanmadığını doğrular
     3. npm run build -- --publish never ile kurulum dosyasını üretir
-    4. latest.yml içindeki dosya adının gerçek dosyayla eşleştiğini doğrular
+    4. latest.yml içindeki dosya adı, boyut ve SHA-512'nin gerçek dosyayla eşleştiğini doğrular
        (uyuşmazsa otomatik güncelleme sessizce çalışmaz - 1.0.0/1.0.1'de bu oldu)
-    5. TASLAK release oluşturur; taslağı güncelleyiciler görmez
-    6. Üç dosyayı da yükler
-    7. Kurulum dosyasının boyutunu bayt bayt doğrular
-    8. Ancak her şey doğruysa taslağı yayına alır
+    5. Kurulum imzasını doğrular; imzasız yayın için açık risk kabulü ister
+    6. TASLAK release oluşturur; taslağı güncelleyiciler görmez
+    7. Üç dosyayı da yükler
+    8. Üç dosyanın da durum ve boyutunu bayt bayt doğrular
+    9. Ancak her şey doğruysa taslağı yayına alır
 
   Kullanımı (PowerShell, proje klasöründe):
       .\scripts\yayinla.ps1
@@ -20,12 +21,16 @@
       package.json içindeki "version" yükseltilir  (ör. 1.0.2 -> 1.0.3)
       git add -A ; git commit -m "..." ; git push
 
+  İmzasız yayın önerilmez. Zorunluysa risk açıkça kabul edilerek:
+      .\scripts\yayinla.ps1 -ImzasizYayinaIzinVer
+
   GitHub anahtarı: git'in Windows Credential Manager'da sakladığı kimlik
   kullanılır. Ayrıca token oluşturmanız gerekmez.
 #>
 
 param(
-  [switch]$AtlaBuild   # Derleme zaten yapıldıysa: .\scripts\yayinla.ps1 -AtlaBuild
+  [switch]$AtlaBuild,  # Derleme zaten yapıldıysa: .\scripts\yayinla.ps1 -AtlaBuild
+  [switch]$ImzasizYayinaIzinVer
 )
 
 $ErrorActionPreference = 'Stop'
@@ -127,6 +132,36 @@ if (-not (Test-Path $blockmap)) { Vazgec "blockmap dosyasi bulunamadi." }
 $kurulumBoyut = (Get-Item $kurulum).Length
 Bilgi ("Kurulum dosyasi: {0:N1} MB" -f ($kurulumBoyut / 1MB))
 
+$manifestBoyutSatiri = Get-Content $manifest | Where-Object { $_ -match '^\s+size:\s*\d+\s*$' } | Select-Object -First 1
+$manifestBoyut = if ($manifestBoyutSatiri) { [int64](($manifestBoyutSatiri -split 'size:')[1].Trim()) } else { 0 }
+if ($manifestBoyut -ne $kurulumBoyut) {
+  Vazgec "latest.yml boyutu ($manifestBoyut) ile kurulum dosyasi boyutu ($kurulumBoyut) tutmuyor."
+}
+
+$manifestShaSatiri = Get-Content $manifest | Where-Object { $_ -match '^\s+sha512:\s*.+' } | Select-Object -First 1
+$manifestSha = if ($manifestShaSatiri) { (($manifestShaSatiri -split 'sha512:')[1]).Trim() } else { '' }
+$sha512 = [System.Security.Cryptography.SHA512]::Create()
+$kurulumAkisi = [System.IO.File]::OpenRead($kurulum)
+try {
+  $gercekSha = [Convert]::ToBase64String($sha512.ComputeHash($kurulumAkisi))
+} finally {
+  $kurulumAkisi.Dispose()
+  $sha512.Dispose()
+}
+if (-not $manifestSha -or $manifestSha -ne $gercekSha) {
+  Vazgec "latest.yml SHA-512 ozeti kurulum dosyasiyla tutmuyor. Eski veya bozuk artefakt yayinlanmayacak."
+}
+Basarili "latest.yml boyut ve SHA-512 dogrulamasi tamam"
+
+$imza = Get-AuthenticodeSignature -LiteralPath $kurulum
+if ($imza.Status -eq 'Valid') {
+  Basarili "Kurulum dosyasinin dijital imzasi gecerli"
+} elseif (-not $ImzasizYayinaIzinVer) {
+  Vazgec "Kurulum dosyasi dijital imzali degil (durum: $($imza.Status)). Musteriye imzasiz guncelleme gondermek icin riski bilerek -ImzasizYayinaIzinVer parametresi gerekir."
+} else {
+  Write-Host "  [uyari] Kurulum dosyasi imzasiz; acik izinle devam ediliyor." -ForegroundColor Yellow
+}
+
 # ── 6. Taslak release ─────────────────────────────────────────
 Write-Host ""
 Write-Host "Taslak release olusturuluyor..." -ForegroundColor White
@@ -165,12 +200,15 @@ foreach ($dosya in @($kurulum, $blockmap, $manifest)) {
 Write-Host ""
 Write-Host "Dogrulaniyor..." -ForegroundColor White
 $kontrol = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/$id" -Headers $baslik
-$yuklenen = $kontrol.assets | Where-Object { $_.name -eq $beklenenAd }
-
-if (-not $yuklenen)                        { Vazgec "Kurulum dosyasi release'de gorunmuyor." }
-if ($yuklenen.state -ne 'uploaded')        { Vazgec "Kurulum dosyasi eksik yuklendi (durum: $($yuklenen.state))." }
-if ($yuklenen.size -ne $kurulumBoyut)      { Vazgec "Boyut tutmuyor: $($yuklenen.size) yerine $kurulumBoyut olmaliydi." }
-Basarili "Kurulum dosyasi tam ve dogru boyutta"
+$beklenenDosyalar = @($kurulum, $blockmap, $manifest)
+foreach ($yerelDosya in $beklenenDosyalar) {
+  $yerel = Get-Item $yerelDosya
+  $yuklenen = $kontrol.assets | Where-Object { $_.name -eq $yerel.Name }
+  if (-not $yuklenen)                   { Vazgec "$($yerel.Name) release'de gorunmuyor." }
+  if ($yuklenen.state -ne 'uploaded')   { Vazgec "$($yerel.Name) eksik yuklendi (durum: $($yuklenen.state))." }
+  if ($yuklenen.size -ne $yerel.Length) { Vazgec "$($yerel.Name) boyutu tutmuyor: $($yuklenen.size) yerine $($yerel.Length) olmaliydi." }
+  Basarili "$($yerel.Name) tam ve dogru boyutta"
+}
 
 # ── 9. Yayına al ──────────────────────────────────────────────
 $yayin = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/$id" -Headers $baslik -Method Patch -Body '{"draft":false}' -ContentType 'application/json'
