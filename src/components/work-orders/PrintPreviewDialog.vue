@@ -41,6 +41,37 @@ const show = computed({
 
 const { tlFormatla, tarihSaatFormatla: tarihFormatla } = useFormatters()
 
+// Boş ve dolu fiş aynı iki sütunlu atölye formunu kullanır. Her sayfa 40 kalem
+// taşır; daha uzun listeler aynı form düzeniyle yeni sayfaya devam eder.
+const atolyeSutunuBasinaSatir = 22
+const sayfaBasinaKalem = atolyeSutunuBasinaSatir * 2
+
+const kalemAciklamasi = (kalem) => {
+  if (!kalem) return ''
+  if (kalem.type === 'Parça') {
+    return `${kalem.part_code || ''} ${kalem.part_name || kalem.description || ''}`.trim()
+  }
+  return kalem.description || '-'
+}
+
+const kalemSayfalariniOlustur = (kalemler) => {
+  const sayfaSayisi = Math.max(1, Math.ceil(kalemler.length / sayfaBasinaKalem))
+
+  return Array.from({ length: sayfaSayisi }, (_, sayfaIndex) => (
+    Array.from({ length: 2 }, (_, sutunIndex) => (
+      Array.from({ length: atolyeSutunuBasinaSatir }, (_, satirIndex) => {
+        const genelIndex = sayfaIndex * sayfaBasinaKalem + sutunIndex * atolyeSutunuBasinaSatir + satirIndex
+        return {
+          sira: genelIndex + 1,
+          kalem: kalemler[genelIndex] || null
+        }
+      })
+    ))
+  ))
+}
+
+const onizlemeKalemSayfalari = computed(() => kalemSayfalariniOlustur(props.kalemler))
+
 const guvenliMetin = (deger) => {
   return String(deger ?? '')
     .replaceAll('&', '&amp;')
@@ -79,24 +110,49 @@ const servisFisiYazdirGercek = async () => {
 
   const firma = firmaBilgileri
 
-  const kalemSatirlari = props.kalemler.map((kalem, index) => {
-    const tip = kalem.type || '-'
-
-    const aciklama = kalem.type === 'Parça'
-      ? `${kalem.part_code || ''} ${kalem.part_name || kalem.description || ''}`.trim()
-      : kalem.description || '-'
-
-    return `
-      <tr>
-        <td class="center">${index + 1}</td>
-        <td>${guvenliMetin(tip)}</td>
-        <td>${guvenliMetin(aciklama)}</td>
-        <td class="right">${guvenliMetin(kalem.quantity || 0)}</td>
-        <td class="right">${guvenliMetin(tlFormatla(kalem.unit_price))}</td>
-        <td class="right strong">${guvenliMetin(tlFormatla(kalem.total_price))}</td>
-      </tr>
-    `
-  }).join('')
+  const kalemSayfalariHtml = kalemSayfalariniOlustur(props.kalemler).map((sayfa, sayfaIndex) => `
+    <div class="items-page ${sayfaIndex > 0 ? 'continuation-page' : ''}">
+      ${sayfaIndex > 0 ? `
+        <div class="continuation-context">
+          Servis Fişi Devamı · İş Emri #${guvenliMetin(isEmri.id)} ·
+          ${guvenliMetin(isEmri.plate || '-')} · ${guvenliMetin(isEmri.customer_name || '-')}
+        </div>
+      ` : ''}
+      <div class="manual-items-grid">
+        ${sayfa.map((satirlar) => `
+          <table class="manual-items-table">
+            <thead>
+              <tr>
+                <th style="width: 24px;" class="center">#</th>
+                <th>Parça / İşçilik Açıklaması</th>
+                <th style="width: 62px;" class="center">Adet / Tutar</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${satirlar.map(({ sira, kalem }) => `
+                <tr class="blank-item-row">
+                  <td class="center">${sira}</td>
+                  <td>
+                    ${kalem ? `
+                      <span class="item-kind">${guvenliMetin(kalem.type === 'Parça' ? 'P' : 'İ')}</span>
+                      ${guvenliMetin(kalemAciklamasi(kalem))}
+                      <span class="item-unit-price">Birim: ${guvenliMetin(tlFormatla(kalem.unit_price))}</span>
+                    ` : ''}
+                  </td>
+                  <td class="center item-amount">
+                    ${kalem ? `
+                      <span>${guvenliMetin(kalem.quantity || 0)}</span>
+                      <strong>${guvenliMetin(tlFormatla(kalem.total_price))}</strong>
+                    ` : ''}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `).join('')}
+      </div>
+    </div>
+  `).join('')
 
   const toplamTutar = props.kalemler.reduce((toplam, kalem) => {
     return toplam + Number(kalem.total_price || 0)
@@ -123,73 +179,84 @@ const servisFisiYazdirGercek = async () => {
 
           body {
             margin: 0;
-            padding: 24px;
+            padding: 18px;
             font-family: Arial, Helvetica, sans-serif;
             color: #111827;
             background: #ffffff;
-            font-size: 12.5px;
+            font-size: 11.5px;
+            line-height: 1.3;
           }
 
           .page {
-            max-width: 980px;
+            max-width: 794px;
             margin: 0 auto;
           }
 
           .top-header {
             display: grid;
-            grid-template-columns: 1.4fr 0.8fr;
-            gap: 18px;
-            align-items: stretch;
-            border-bottom: 3px solid #111827;
-            padding-bottom: 16px;
-            margin-bottom: 18px;
+            grid-template-columns: minmax(0, 1fr) 230px;
+            gap: 0;
+            align-items: center;
+            border: 1.5px solid #111827;
+            border-radius: 4px;
+            margin-bottom: 6px;
+            overflow: hidden;
           }
 
           .company-box {
+            min-width: 0;
+            padding: 7px 9px;
+          }
+
+          .company-name {
+            font-size: 24px;
+            font-weight: 900;
+            letter-spacing: -0.3px;
+            margin: 0;
+            color: #111827;
+            line-height: 1.05;
+          }
+
+          .company-subtitle {
+            margin-top: 2px;
+            color: #374151;
+            font-size: 12px;
+            font-weight: 700;
+          }
+
+          .company-desc {
+            display: inline;
+            margin-right: 10px;
+            color: #6b7280;
+            font-size: 10px;
+          }
+
+          .company-contact-line {
+            margin-top: 3px;
+            line-height: 1.2;
+          }
+
+          .document-box {
+            align-self: stretch;
+            border-left: 1px solid #111827;
+            padding: 6px 8px;
+            text-align: right;
             display: flex;
             flex-direction: column;
             justify-content: center;
           }
 
-          .company-name {
-            font-size: 30px;
-            font-weight: 900;
-            letter-spacing: -0.5px;
-            margin: 0;
-            color: #111827;
-          }
-
-          .company-subtitle {
-            margin-top: 5px;
-            color: #374151;
-            font-size: 14px;
-            font-weight: 700;
-          }
-
-          .company-desc {
-            margin-top: 8px;
-            color: #6b7280;
-            font-size: 12px;
-          }
-
-          .document-box {
-            border: 1px solid #111827;
-            border-radius: 8px;
-            padding: 12px;
-            text-align: right;
-          }
-
           .document-title {
-            font-size: 20px;
+            font-size: 17px;
             font-weight: 900;
-            margin-bottom: 8px;
+            margin-bottom: 3px;
             color: #111827;
           }
 
           .document-no {
-            font-size: 15px;
+            font-size: 12px;
             font-weight: 800;
-            margin-bottom: 5px;
+            margin-bottom: 2px;
           }
 
           .muted {
@@ -198,52 +265,83 @@ const servisFisiYazdirGercek = async () => {
 
           .section {
             border: 1px solid #d1d5db;
-            border-radius: 8px;
-            margin-bottom: 14px;
+            border-radius: 4px;
+            margin-bottom: 6px;
             overflow: hidden;
           }
 
           .section-title {
             background: #f3f4f6;
             border-bottom: 1px solid #d1d5db;
-            padding: 8px 10px;
+            padding: 4px 6px;
             font-weight: 900;
-            font-size: 13px;
+            font-size: 11px;
             color: #111827;
           }
 
           .section-body {
-            padding: 10px;
+            padding: 5px 6px;
           }
 
           .info-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 8px 18px;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 4px 12px;
+          }
+
+          .header-info-grid {
+            grid-column: 1 / -1;
+            border-top: 1px solid #111827;
+            padding: 5px 8px;
+            background: #f9fafb;
           }
 
           .info-row {
-            display: grid;
-            grid-template-columns: 125px 1fr;
-            gap: 8px;
-            align-items: start;
+            min-width: 0;
+          }
+
+          .info-row.wide {
+            grid-column: span 2;
           }
 
           .label {
             color: #4b5563;
             font-weight: 700;
+            font-size: 8.8px;
+            text-transform: uppercase;
+            letter-spacing: 0.25px;
           }
 
           .value {
             color: #111827;
             font-weight: 600;
+            font-size: 11px;
+            margin-top: 1px;
+            overflow-wrap: anywhere;
           }
 
           .description-box {
-            min-height: 54px;
-            line-height: 1.45;
+            min-height: 11mm;
+            line-height: 1.3;
             color: #111827;
             white-space: pre-wrap;
+            overflow-wrap: anywhere;
+          }
+
+          .complaint-section {
+            display: grid;
+            grid-template-columns: 126px minmax(0, 1fr);
+          }
+
+          .complaint-section .section-title {
+            border-right: 1px solid #d1d5db;
+            border-bottom: 0;
+            display: flex;
+            align-items: center;
+          }
+
+          .complaint-section .section-body {
+            padding: 4px 6px;
           }
 
           table {
@@ -256,14 +354,15 @@ const servisFisiYazdirGercek = async () => {
             color: #111827;
             font-weight: 900;
             border: 1px solid #d1d5db;
-            padding: 8px;
+            padding: 4px 5px;
             text-align: left;
           }
 
           td {
             border: 1px solid #d1d5db;
-            padding: 8px;
+            padding: 4px 5px;
             vertical-align: top;
+            overflow-wrap: anywhere;
           }
 
           .center {
@@ -281,56 +380,127 @@ const servisFisiYazdirGercek = async () => {
           .total-area {
             display: flex;
             justify-content: flex-end;
-            margin-top: 12px;
+            margin-top: 6px;
           }
 
           .total-box {
-            min-width: 280px;
-            border: 2px solid #111827;
-            border-radius: 8px;
+            min-width: 235px;
+            border: 1.5px solid #111827;
+            border-radius: 4px;
             overflow: hidden;
           }
 
           .total-row {
             display: flex;
             justify-content: space-between;
-            gap: 16px;
-            padding: 11px 12px;
-            font-size: 15px;
+            gap: 12px;
+            padding: 5px 7px;
+            font-size: 11px;
             font-weight: 900;
             background: #f9fafb;
           }
 
+          .total-row + .total-row {
+            border-top: 1px solid #e5e7eb;
+          }
+
+          .total-row.payment-row {
+            font-size: 9px;
+            color: #4b5563;
+          }
+
           .warning-note {
-            margin-top: 14px;
-            border: 2px solid #f59e0b;
+            margin-top: 6px;
+            border: 1px solid #f59e0b;
             background: #fffbeb;
             color: #92400e;
-            padding: 10px 12px;
-            border-radius: 8px;
-            font-weight: 900;
-            line-height: 1.45;
+            padding: 4px 6px;
+            border-radius: 4px;
+            font-size: 8.5px;
+            font-weight: 800;
+            line-height: 1.25;
           }
 
-          .footer-grid {
+          .items-section {
+            overflow: visible;
+          }
+
+          .items-section .section-body {
+            padding: 0;
+          }
+
+          .items-section table {
+            table-layout: fixed;
+          }
+
+          .manual-items-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 44px;
-            margin-top: 54px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 5px;
+            padding: 0;
           }
 
-          .signature-box {
-            border-top: 1px solid #111827;
-            padding-top: 8px;
-            text-align: center;
+          .manual-items-table th {
+            font-size: 9.5px;
+            padding: 4px;
+          }
+
+          .manual-items-table td {
+            padding: 3px 4px;
+            font-size: 9.5px;
+          }
+
+          .item-kind {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 15px;
+            height: 15px;
+            margin-right: 2px;
+            border: 1px solid #9ca3af;
+            border-radius: 2px;
+            font-size: 8px;
+            font-weight: 900;
+          }
+
+          .item-unit-price {
+            display: block;
+            margin-top: 1px;
+            color: #6b7280;
+            font-size: 8.5px;
+          }
+
+          .item-amount span,
+          .item-amount strong {
+            display: block;
+          }
+
+          .item-amount strong {
+            margin-top: 1px;
+            font-size: 8.5px;
+          }
+
+          .blank-item-row td {
+            height: 7.8mm;
+          }
+
+          .continuation-page {
+            break-before: page;
+            page-break-before: always;
+          }
+
+          .continuation-context {
+            border: 1px solid #111827;
+            border-bottom: 0;
+            padding: 4px 6px;
+            font-size: 9px;
             font-weight: 800;
           }
 
-          .signature-sub {
-            margin-top: 4px;
-            color: #6b7280;
-            font-size: 11px;
-            font-weight: 500;
+          .closing-block {
+            break-inside: avoid;
+            page-break-inside: avoid;
+            padding: 0 6px 2px;
           }
 
           .print-actions {
@@ -364,8 +534,14 @@ const servisFisiYazdirGercek = async () => {
           }
 
           @media print {
+            @page {
+              size: A4 portrait;
+              margin: 8mm 9mm 9mm;
+            }
+
             body {
               padding: 0;
+              font-size: 11px;
             }
 
             .page {
@@ -377,8 +553,27 @@ const servisFisiYazdirGercek = async () => {
               display: none;
             }
 
-            .section {
+            .top-header,
+            .complaint-section,
+            .closing-block {
               break-inside: avoid;
+              page-break-inside: avoid;
+            }
+
+            .items-section {
+              break-inside: auto;
+              page-break-inside: auto;
+            }
+
+            thead {
+              display: table-header-group;
+            }
+
+            tr,
+            td,
+            th {
+              break-inside: avoid;
+              page-break-inside: avoid;
             }
           }
         </style>
@@ -397,156 +592,100 @@ const servisFisiYazdirGercek = async () => {
             <div class="company-box">
               <h1 class="company-name">${guvenliMetin(firma.unvan)}</h1>
               <div class="company-subtitle">${guvenliMetin(firma.altBaslik)}</div>
-              ${firmaIletisimSatirlari().map((satir) => `<div class="company-desc">${guvenliMetin(satir)}</div>`).join('')}
+              <div class="company-contact-line">
+                ${firmaIletisimSatirlari().map((satir) => `<span class="company-desc">${guvenliMetin(satir)}</span>`).join('')}
+              </div>
             </div>
 
             <div class="document-box">
               <div class="document-title">SERVİS FİŞİ</div>
               <div class="document-no">İş Emri No: #${guvenliMetin(isEmri.id)}</div>
-              <div class="muted">Fiş Tarihi: ${guvenliMetin(new Date().toLocaleString('tr-TR'))}</div>
+              <div class="muted">Fiş Tarihi: ${guvenliMetin(tarihFormatla(isEmri.created_at))}</div>
               <div class="muted">Durum: ${guvenliMetin(isEmri.status || '-')}</div>
             </div>
-          </div>
 
-          <div class="section">
-            <div class="section-title">Müşteri Bilgileri</div>
-
-            <div class="section-body">
-              <div class="info-grid">
-                <div class="info-row">
-                  <div class="label">Müşteri</div>
-                  <div class="value">${guvenliMetin(isEmri.customer_name || '-')}</div>
-                </div>
-
-                <div class="info-row">
-                  <div class="label">Telefon</div>
-                  <div class="value">${guvenliMetin(isEmri.customer_phone || '-')}</div>
-                </div>
+            <div class="header-info-grid info-grid">
+              <div class="info-row wide">
+                <div class="label">Müşteri</div>
+                <div class="value">${guvenliMetin(isEmri.customer_name || '-')}</div>
+              </div>
+              <div class="info-row">
+                <div class="label">Telefon</div>
+                <div class="value">${guvenliMetin(isEmri.customer_phone || '-')}</div>
+              </div>
+              <div class="info-row">
+                <div class="label">Plaka</div>
+                <div class="value">${guvenliMetin(isEmri.plate || '-')}</div>
+              </div>
+              <div class="info-row wide">
+                <div class="label">Marka / Model</div>
+                <div class="value">${guvenliMetin(`${isEmri.brand || '-'} / ${isEmri.model || '-'}`)}</div>
+              </div>
+              <div class="info-row">
+                <div class="label">Şase</div>
+                <div class="value">${guvenliMetin(isEmri.chassis || '-')}</div>
+              </div>
+              <div class="info-row">
+                <div class="label">Kilometre</div>
+                <div class="value">${guvenliMetin(isEmri.mileage ? Number(isEmri.mileage).toLocaleString('tr-TR') + ' km' : '-')}</div>
+              </div>
+              <div class="info-row">
+                <div class="label">Açılış Tarihi</div>
+                <div class="value">${guvenliMetin(tarihFormatla(isEmri.created_at))}</div>
+              </div>
+              <div class="info-row">
+                <div class="label">Kapanış</div>
+                <div class="value">${guvenliMetin(tarihFormatla(isEmri.closed_at))}</div>
               </div>
             </div>
           </div>
 
-          <div class="section">
-            <div class="section-title">Araç ve İş Emri Bilgileri</div>
+          <div class="section complaint-section">
+            <div class="section-title">Müşteri Talebi / Şikâyeti</div>
 
             <div class="section-body">
-              <div class="info-grid">
-                <div class="info-row">
-                  <div class="label">Plaka</div>
-                  <div class="value">${guvenliMetin(isEmri.plate || '-')}</div>
-                </div>
-
-                <div class="info-row">
-                  <div class="label">Marka / Model</div>
-                  <div class="value">${guvenliMetin(`${isEmri.brand || '-'} / ${isEmri.model || '-'}`)}</div>
-                </div>
-
-                <div class="info-row">
-                  <div class="label">Şase</div>
-                  <div class="value">${guvenliMetin(isEmri.chassis || '-')}</div>
-                </div>
-
-                <div class="info-row">
-                  <div class="label">Kilometre</div>
-                  <div class="value">${guvenliMetin(isEmri.mileage ? Number(isEmri.mileage).toLocaleString('tr-TR') + ' km' : '-')}</div>
-                </div>
-
-                <div class="info-row">
-                  <div class="label">Açılış Tarihi</div>
-                  <div class="value">${guvenliMetin(tarihFormatla(isEmri.created_at))}</div>
-                </div>
-
-                <div class="info-row">
-                  <div class="label">Kapanış Tarihi</div>
-                  <div class="value">${guvenliMetin(tarihFormatla(isEmri.closed_at))}</div>
-                </div>
-
-                <div class="info-row">
-                  <div class="label">Açan Usta</div>
-                  <div class="value">${guvenliMetin(isEmri.opened_by_master_name || '-')}</div>
-                </div>
-
-                <div class="info-row">
-                  <div class="label">Kapatan Usta</div>
-                  <div class="value">${guvenliMetin(isEmri.closed_by_master_name || '-')}</div>
-                </div>
-              </div>
+              <div class="description-box">${guvenliMetin(isEmri.description || '')}</div>
             </div>
           </div>
 
-          <div class="section">
-            <div class="section-title">Müşteri Şikayeti / Yapılacak İşlem</div>
-
-            <div class="section-body">
-              <div class="description-box">${guvenliMetin(isEmri.description || '-')}</div>
-            </div>
-          </div>
-
-          <div class="section">
+          <div class="section items-section">
             <div class="section-title">Parça ve İşçilik Kalemleri</div>
 
             <div class="section-body">
-              <table>
-                <thead>
-                  <tr>
-                    <th style="width: 42px;" class="center">#</th>
-                    <th style="width: 90px;">Tip</th>
-                    <th>Açıklama</th>
-                    <th style="width: 80px;" class="right">Miktar</th>
-                    <th style="width: 120px;" class="right">Birim Fiyat</th>
-                    <th style="width: 130px;" class="right">Toplam</th>
-                  </tr>
-                </thead>
+              ${kalemSayfalariHtml}
 
-                <tbody>
-                  ${kalemSatirlari || `
-                    <tr>
-                      <td colspan="6" class="center">Bu iş emrine ait kalem bulunamadı.</td>
-                    </tr>
-                  `}
-                </tbody>
-              </table>
-
-              <div class="total-area">
-                <div class="total-box">
-                  <div class="total-row">
-                    <span>Genel Toplam</span>
-                    <span>${guvenliMetin(tlFormatla(toplamTutar || isEmri.total_price))}</span>
-                  </div>
+              <div class="closing-block">
+${props.kalemler.length > 0 ? `
+                <div class="total-area">
+                  <div class="total-box">
+                    <div class="total-row">
+                      <span>Genel Toplam</span>
+                      <span>${guvenliMetin(tlFormatla(toplamTutar || isEmri.total_price))}</span>
+                    </div>
 ${showPayment ? `
-                  <div class="total-row" style="margin-top: 4px; font-size: 12px; color: #555;">
-                    <span>Tahsil Edilen:</span>
-                    <span>${guvenliMetin(tlFormatla(props.odemeOzeti.toplam_tahsilat))}</span>
-                  </div>
-                  <div class="total-row" style="font-size: 12px; color: #555;">
-                    <span>Kalan Borç:</span>
-                    <span>${guvenliMetin(tlFormatla(props.odemeOzeti.kalan_borc))}</span>
-                  </div>
-                  <div class="total-row" style="font-size: 12px; color: #555;">
-                    <span>Ödeme Durumu:</span>
-                    <span>${guvenliMetin(props.odemeOzeti.odeme_durumu)}</span>
-                  </div>
+                    <div class="total-row payment-row">
+                      <span>Tahsil Edilen</span>
+                      <span>${guvenliMetin(tlFormatla(props.odemeOzeti.toplam_tahsilat))}</span>
+                    </div>
+                    <div class="total-row payment-row">
+                      <span>Kalan Borç</span>
+                      <span>${guvenliMetin(tlFormatla(props.odemeOzeti.kalan_borc))}</span>
+                    </div>
+                    <div class="total-row payment-row">
+                      <span>Ödeme Durumu</span>
+                      <span>${guvenliMetin(props.odemeOzeti.odeme_durumu)}</span>
+                    </div>
 ` : ''}
+                  </div>
                 </div>
+` : ''}
+
+                <div class="warning-note">
+                  Bu belge fatura değildir; e-fatura, e-arşiv fatura veya resmi mali belge yerine geçmez.
+                  Yalnızca servis takip ve bilgilendirme fişidir.
+                </div>
+
               </div>
-
-              <div class="warning-note">
-                Bu belge fatura değildir. E-fatura, e-arşiv fatura veya resmi mali belge yerine geçmez.
-                Sadece servis takip ve bilgilendirme fişidir.
-              </div>
-            </div>
-          </div>
-
-          <div class="footer-grid">
-            <div class="signature-box">
-              Müşteri İmzası
-              ${isEmri.customer_signature ? `<img src="${isEmri.customer_signature}" style="max-height: 55px; max-width: 180px; display: block; margin: 6px auto 2px auto; object-fit: contain;" />` : ''}
-              <div class="signature-sub">${guvenliMetin(isEmri.customer_name || 'Ad Soyad / İmza')}</div>
-            </div>
-
-            <div class="signature-box">
-              Servis Yetkilisi
-              <div class="signature-sub">${guvenliMetin(isEmri.closed_by_master_name || isEmri.opened_by_master_name || '-')}</div>
             </div>
           </div>
         </div>
@@ -580,148 +719,134 @@ ${showPayment ? `
           <div class="company-box">
             <h1 class="company-name">{{ firmaBilgileri.unvan }}</h1>
             <div class="company-subtitle">{{ firmaBilgileri.altBaslik }}</div>
-            <div v-for="satir in firmaIletisimSatirlari()" :key="satir" class="company-desc">{{ satir }}</div>
+            <div class="company-contact-line">
+              <span v-for="satir in firmaIletisimSatirlari()" :key="satir" class="company-desc">{{ satir }}</span>
+            </div>
           </div>
 
           <div class="document-box">
             <div class="document-title">SERVİS FİŞİ</div>
             <div class="document-no">İş Emri No: #{{ seciliIsEmri?.id }}</div>
-            <div class="muted">Fiş Tarihi: {{ new Date().toLocaleString('tr-TR') }}</div>
+            <div class="muted">Fiş Tarihi: {{ tarihFormatla(seciliIsEmri?.created_at) }}</div>
             <div class="muted">Durum: {{ seciliIsEmri?.status }}</div>
           </div>
-        </div>
 
-        <div class="section">
-          <div class="section-title">Müşteri Bilgileri</div>
-          <div class="section-body">
-            <div class="info-grid">
-              <div class="info-row">
-                <div class="label">Müşteri</div>
-                <div class="value">{{ seciliIsEmri?.customer_name || '-' }}</div>
-              </div>
-              <div class="info-row">
-                <div class="label">Telefon</div>
-                <div class="value">{{ seciliIsEmri?.customer_phone || '-' }}</div>
-              </div>
+          <div class="header-info-grid info-grid">
+            <div class="info-row wide">
+              <div class="label">Müşteri</div>
+              <div class="value">{{ seciliIsEmri?.customer_name || '-' }}</div>
+            </div>
+            <div class="info-row">
+              <div class="label">Telefon</div>
+              <div class="value">{{ seciliIsEmri?.customer_phone || '-' }}</div>
+            </div>
+            <div class="info-row">
+              <div class="label">Plaka</div>
+              <div class="value">{{ seciliIsEmri?.plate || '-' }}</div>
+            </div>
+            <div class="info-row wide">
+              <div class="label">Marka / Model</div>
+              <div class="value">{{ seciliIsEmri?.brand || '-' }} / {{ seciliIsEmri?.model || '-' }}</div>
+            </div>
+            <div class="info-row">
+              <div class="label">Şase</div>
+              <div class="value">{{ seciliIsEmri?.chassis || '-' }}</div>
+            </div>
+            <div class="info-row">
+              <div class="label">Kilometre</div>
+              <div class="value">{{ seciliIsEmri?.mileage ? Number(seciliIsEmri.mileage).toLocaleString('tr-TR') + ' km' : '-' }}</div>
+            </div>
+            <div class="info-row">
+              <div class="label">Açılış Tarihi</div>
+              <div class="value">{{ tarihFormatla(seciliIsEmri?.created_at) }}</div>
+            </div>
+            <div class="info-row">
+              <div class="label">Kapanış</div>
+              <div class="value">{{ tarihFormatla(seciliIsEmri?.closed_at) }}</div>
             </div>
           </div>
         </div>
 
-        <div class="section">
-          <div class="section-title">Araç ve İş Emri Bilgileri</div>
+        <div class="section complaint-section">
+          <div class="section-title">Müşteri Talebi / Şikâyeti</div>
           <div class="section-body">
-            <div class="info-grid">
-              <div class="info-row">
-                <div class="label">Plaka</div>
-                <div class="value">{{ seciliIsEmri?.plate || '-' }}</div>
-              </div>
-              <div class="info-row">
-                <div class="label">Marka / Model</div>
-                <div class="value">{{ seciliIsEmri?.brand || '-' }} / {{ seciliIsEmri?.model || '-' }}</div>
-              </div>
-              <div class="info-row">
-                <div class="label">Şase</div>
-                <div class="value">{{ seciliIsEmri?.chassis || '-' }}</div>
-              </div>
-              <div class="info-row">
-                <div class="label">Kilometre</div>
-                <div class="value">{{ seciliIsEmri?.mileage ? Number(seciliIsEmri.mileage).toLocaleString('tr-TR') + ' km' : '-' }}</div>
-              </div>
-              <div class="info-row">
-                <div class="label">Açılış Tarihi</div>
-                <div class="value">{{ tarihFormatla(seciliIsEmri?.created_at) }}</div>
-              </div>
-              <div class="info-row">
-                <div class="label">Kapanış Tarihi</div>
-                <div class="value">{{ tarihFormatla(seciliIsEmri?.closed_at) }}</div>
-              </div>
-              <div class="info-row">
-                <div class="label">Açan Usta</div>
-                <div class="value">{{ seciliIsEmri?.opened_by_master_name || '-' }}</div>
-              </div>
-              <div class="info-row">
-                <div class="label">Kapatan Usta</div>
-                <div class="value">{{ seciliIsEmri?.closed_by_master_name || '-' }}</div>
-              </div>
-            </div>
+            <div class="description-box">{{ seciliIsEmri?.description || '' }}</div>
           </div>
         </div>
 
-        <div class="section">
-          <div class="section-title">Müşteri Şikayeti / Yapılacak İşlem</div>
-          <div class="section-body">
-            <div class="description-box">{{ seciliIsEmri?.description || '-' }}</div>
-          </div>
-        </div>
-
-        <div class="section">
+        <div class="section items-section">
           <div class="section-title">Parça ve İşçilik Kalemleri</div>
           <div class="section-body">
-            <table>
-              <thead>
-                <tr>
-                  <th style="width: 42px;" class="center">#</th>
-                  <th style="width: 90px;">Tip</th>
-                  <th>Açıklama</th>
-                  <th style="width: 80px;" class="right">Miktar</th>
-                  <th style="width: 120px;" class="right">Birim Fiyat</th>
-                  <th style="width: 130px;" class="right">Toplam</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(kalem, index) in kalemler" :key="kalem.id || index">
-                  <td class="center">{{ index + 1 }}</td>
-                  <td>{{ kalem.type || '-' }}</td>
-                  <td>
-                    {{ kalem.type === 'Parça' ? `${kalem.part_code || ''} ${kalem.part_name || kalem.description || ''}`.trim() : kalem.description || '-' }}
-                  </td>
-                  <td class="right">{{ kalem.quantity || 0 }}</td>
-                  <td class="right">{{ tlFormatla(kalem.unit_price) }}</td>
-                  <td class="right strong">{{ tlFormatla(kalem.total_price) }}</td>
-                </tr>
-                <tr v-if="kalemler.length === 0">
-                  <td colspan="6" class="center">Bu iş emrine ait kalem bulunamadı.</td>
-                </tr>
-              </tbody>
-            </table>
+            <div
+              v-for="(sayfa, sayfaIndex) in onizlemeKalemSayfalari"
+              :key="sayfaIndex"
+              class="items-page"
+              :class="{ 'continuation-page': sayfaIndex > 0 }"
+            >
+              <div v-if="sayfaIndex > 0" class="continuation-context">
+                Servis Fişi Devamı · İş Emri #{{ seciliIsEmri?.id }} ·
+                {{ seciliIsEmri?.plate || '-' }} · {{ seciliIsEmri?.customer_name || '-' }}
+              </div>
 
-            <div class="total-area">
-              <div class="total-box">
-                <div class="total-row">
-                  <span>Genel Toplam</span>
-                  <span>{{ tlFormatla(kalemler.reduce((toplam, kalem) => toplam + Number(kalem.total_price || 0), 0) || seciliIsEmri?.total_price) }}</span>
-                </div>
-                <div class="total-row" style="margin-top: 4px; font-size: 12px; color: #555;" v-if="showPaymentSummary">
-                  <span>Tahsil Edilen:</span>
-                  <span>{{ tlFormatla(odemeOzeti.toplam_tahsilat) }}</span>
-                </div>
-                <div class="total-row" style="font-size: 12px; color: #555;" v-if="showPaymentSummary">
-                  <span>Kalan Borç:</span>
-                  <span>{{ tlFormatla(odemeOzeti.kalan_borc) }}</span>
-                </div>
-                <div class="total-row" style="font-size: 12px; color: #555;" v-if="showPaymentSummary">
-                  <span>Ödeme Durumu:</span>
-                  <span>{{ odemeOzeti.odeme_durumu }}</span>
-                </div>
+              <div class="manual-items-grid">
+                <table v-for="(satirlar, sutunIndex) in sayfa" :key="sutunIndex" class="manual-items-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 24px;" class="center">#</th>
+                      <th>Parça / İşçilik Açıklaması</th>
+                      <th style="width: 62px;" class="center">Adet / Tutar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="satir in satirlar" :key="satir.sira" class="blank-item-row">
+                      <td class="center">{{ satir.sira }}</td>
+                      <td>
+                        <template v-if="satir.kalem">
+                          <span class="item-kind">{{ satir.kalem.type === 'Parça' ? 'P' : 'İ' }}</span>
+                          {{ kalemAciklamasi(satir.kalem) }}
+                          <span class="item-unit-price">Birim: {{ tlFormatla(satir.kalem.unit_price) }}</span>
+                        </template>
+                      </td>
+                      <td class="center item-amount">
+                        <template v-if="satir.kalem">
+                          <span>{{ satir.kalem.quantity || 0 }}</span>
+                          <strong>{{ tlFormatla(satir.kalem.total_price) }}</strong>
+                        </template>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
 
-            <div class="warning-note">
-              Bu belge fatura değildir. E-fatura, e-arşiv fatura veya resmi mali belge yerine geçmez.
-              Sadece servis takip ve bilgilendirme fişidir.
-            </div>
-          </div>
-        </div>
+            <div class="closing-block">
+              <div v-if="kalemler.length > 0" class="total-area">
+                <div class="total-box">
+                  <div class="total-row">
+                    <span>Genel Toplam</span>
+                    <span>{{ tlFormatla(kalemler.reduce((toplam, kalem) => toplam + Number(kalem.total_price || 0), 0) || seciliIsEmri?.total_price) }}</span>
+                  </div>
+                  <div v-if="showPaymentSummary" class="total-row payment-row">
+                    <span>Tahsil Edilen</span>
+                    <span>{{ tlFormatla(odemeOzeti.toplam_tahsilat) }}</span>
+                  </div>
+                  <div v-if="showPaymentSummary" class="total-row payment-row">
+                    <span>Kalan Borç</span>
+                    <span>{{ tlFormatla(odemeOzeti.kalan_borc) }}</span>
+                  </div>
+                  <div v-if="showPaymentSummary" class="total-row payment-row">
+                    <span>Ödeme Durumu</span>
+                    <span>{{ odemeOzeti.odeme_durumu }}</span>
+                  </div>
+                </div>
+              </div>
 
-        <div class="footer-grid">
-          <div class="signature-box">
-            Müşteri İmzası
-            <img v-if="seciliIsEmri?.customer_signature" :src="seciliIsEmri.customer_signature" style="max-height: 55px; max-width: 180px; display: block; margin: 6px auto 2px auto; object-fit: contain;" />
-            <div class="signature-sub">{{ seciliIsEmri?.customer_name || 'Ad Soyad / İmza' }}</div>
-          </div>
-          <div class="signature-box">
-            Servis Yetkilisi
-            <div class="signature-sub">{{ seciliIsEmri?.closed_by_master_name || seciliIsEmri?.opened_by_master_name || '-' }}</div>
+              <div class="warning-note">
+                Bu belge fatura değildir; e-fatura, e-arşiv fatura veya resmi mali belge yerine geçmez.
+                Yalnızca servis takip ve bilgilendirme fişidir.
+              </div>
+
+            </div>
           </div>
         </div>
       </div>
@@ -754,10 +879,11 @@ ${showPayment ? `
 .preview-sheet {
   background-color: #ffffff;
   color: #111827;
-  padding: 30px;
+  padding: 26px 30px 30px;
   border-radius: 4px;
   font-family: Arial, Helvetica, sans-serif;
-  font-size: 13px;
+  font-size: 11.5px;
+  line-height: 1.3;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
   max-width: 800px;
   margin: 0 auto;
@@ -765,59 +891,68 @@ ${showPayment ? `
 
 .preview-sheet .top-header {
   display: grid;
-  grid-template-columns: 1.4fr 0.8fr;
-  gap: 18px;
-  align-items: stretch;
-  border-bottom: 3px solid #111827;
-  padding-bottom: 16px;
-  margin-bottom: 18px;
+  grid-template-columns: minmax(0, 1fr) 230px;
+  gap: 0;
+  align-items: center;
+  border: 1.5px solid #111827;
+  border-radius: 4px;
+  margin-bottom: 6px;
+  overflow: hidden;
 }
 
 .preview-sheet .company-box {
+  min-width: 0;
+  padding: 7px 9px;
+}
+
+.preview-sheet .company-name {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.3px;
+  margin: 0;
+  color: #111827;
+  line-height: 1.05;
+}
+
+.preview-sheet .company-subtitle {
+  margin-top: 2px;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.preview-sheet .company-desc {
+  margin-right: 10px;
+  color: #6b7280;
+  font-size: 10px;
+}
+
+.preview-sheet .company-contact-line {
+  margin-top: 3px;
+  line-height: 1.2;
+}
+
+.preview-sheet .document-box {
+  align-self: stretch;
+  border-left: 1px solid #111827;
+  padding: 6px 8px;
+  text-align: right;
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 
-.preview-sheet .company-name {
-  font-size: 26px;
-  font-weight: 900;
-  letter-spacing: -0.5px;
-  margin: 0;
-  color: #111827;
-}
-
-.preview-sheet .company-subtitle {
-  margin-top: 5px;
-  color: #374151;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.preview-sheet .company-desc {
-  margin-top: 8px;
-  color: #6b7280;
-  font-size: 11px;
-}
-
-.preview-sheet .document-box {
-  border: 1px solid #111827;
-  border-radius: 8px;
-  padding: 12px;
-  text-align: right;
-}
-
 .preview-sheet .document-title {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 900;
-  margin-bottom: 8px;
+  margin-bottom: 3px;
   color: #111827;
 }
 
 .preview-sheet .document-no {
-  font-size: 14px;
+  font-size: 12px;
   font-weight: 800;
-  margin-bottom: 5px;
+  margin-bottom: 2px;
 }
 
 .preview-sheet .muted {
@@ -826,8 +961,8 @@ ${showPayment ? `
 
 .preview-sheet .section {
   border: 1px solid #d1d5db;
-  border-radius: 8px;
-  margin-bottom: 14px;
+  border-radius: 4px;
+  margin-bottom: 6px;
   overflow: hidden;
   background: #ffffff;
 }
@@ -835,44 +970,75 @@ ${showPayment ? `
 .preview-sheet .section-title {
   background: #f3f4f6;
   border-bottom: 1px solid #d1d5db;
-  padding: 8px 10px;
+  padding: 4px 6px;
   font-weight: 900;
-  font-size: 13px;
+  font-size: 11px;
   color: #111827;
 }
 
 .preview-sheet .section-body {
-  padding: 10px;
+  padding: 5px 6px;
 }
 
 .preview-sheet .info-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px 18px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px 12px;
+}
+
+.preview-sheet .header-info-grid {
+  grid-column: 1 / -1;
+  border-top: 1px solid #111827;
+  padding: 5px 8px;
+  background: #f9fafb;
 }
 
 .preview-sheet .info-row {
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 8px;
-  align-items: start;
+  min-width: 0;
+}
+
+.preview-sheet .info-row.wide {
+  grid-column: span 2;
 }
 
 .preview-sheet .label {
   color: #4b5563;
   font-weight: 700;
+  font-size: 8.8px;
+  text-transform: uppercase;
+  letter-spacing: 0.25px;
 }
 
 .preview-sheet .value {
   color: #111827;
   font-weight: 600;
+  font-size: 11px;
+  margin-top: 1px;
+  overflow-wrap: anywhere;
 }
 
 .preview-sheet .description-box {
-  min-height: 54px;
-  line-height: 1.45;
+  min-height: 11mm;
+  line-height: 1.3;
   color: #111827;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.preview-sheet .complaint-section {
+  display: grid;
+  grid-template-columns: 126px minmax(0, 1fr);
+}
+
+.preview-sheet .complaint-section .section-title {
+  border-right: 1px solid #d1d5db;
+  border-bottom: 0;
+  display: flex;
+  align-items: center;
+}
+
+.preview-sheet .complaint-section .section-body {
+  padding: 4px 6px;
 }
 
 .preview-sheet table {
@@ -885,15 +1051,16 @@ ${showPayment ? `
   color: #111827;
   font-weight: 900;
   border: 1px solid #d1d5db;
-  padding: 8px;
+  padding: 4px 5px;
   text-align: left;
 }
 
 .preview-sheet td {
   border: 1px solid #d1d5db;
-  padding: 8px;
+  padding: 4px 5px;
   vertical-align: top;
   color: #111827;
+  overflow-wrap: anywhere;
 }
 
 .preview-sheet .center {
@@ -911,57 +1078,126 @@ ${showPayment ? `
 .preview-sheet .total-area {
   display: flex;
   justify-content: flex-end;
-  margin-top: 12px;
+  margin-top: 6px;
 }
 
 .preview-sheet .total-box {
-  min-width: 280px;
-  border: 2px solid #111827;
-  border-radius: 8px;
+  min-width: 235px;
+  border: 1.5px solid #111827;
+  border-radius: 4px;
   overflow: hidden;
 }
 
 .preview-sheet .total-row {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  padding: 11px 12px;
-  font-size: 14px;
+  gap: 12px;
+  padding: 5px 7px;
+  font-size: 11px;
   font-weight: 900;
   background: #f9fafb;
   color: #111827;
 }
 
+.preview-sheet .total-row + .total-row {
+  border-top: 1px solid #e5e7eb;
+}
+
+.preview-sheet .total-row.payment-row {
+  font-size: 9px;
+  color: #4b5563;
+}
+
 .preview-sheet .warning-note {
-  margin-top: 14px;
-  border: 2px solid #f59e0b;
+  margin-top: 6px;
+  border: 1px solid #f59e0b;
   background: #fffbeb;
   color: #92400e;
-  padding: 10px 12px;
-  border-radius: 8px;
-  font-weight: 900;
-  line-height: 1.45;
-}
-
-.preview-sheet .footer-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 44px;
-  margin-top: 40px;
-}
-
-.preview-sheet .signature-box {
-  border-top: 1px solid #111827;
-  padding-top: 8px;
-  text-align: center;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 8.5px;
   font-weight: 800;
-  color: #111827;
+  line-height: 1.25;
 }
 
-.preview-sheet .signature-sub {
-  margin-top: 4px;
+.preview-sheet .items-section {
+  overflow: visible;
+}
+
+.preview-sheet .items-section .section-body {
+  padding: 0;
+}
+
+.preview-sheet .items-section table {
+  table-layout: fixed;
+}
+
+.preview-sheet .manual-items-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px;
+  padding: 0;
+}
+
+.preview-sheet .manual-items-table th {
+  font-size: 9.5px;
+  padding: 4px;
+}
+
+.preview-sheet .manual-items-table td {
+  padding: 3px 4px;
+  font-size: 9.5px;
+}
+
+.preview-sheet .item-kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  margin-right: 2px;
+  border: 1px solid #9ca3af;
+  border-radius: 2px;
+  font-size: 8px;
+  font-weight: 900;
+}
+
+.preview-sheet .item-unit-price {
+  display: block;
+  margin-top: 1px;
   color: #6b7280;
-  font-size: 11px;
-  font-weight: 500;
+  font-size: 8.5px;
+}
+
+.preview-sheet .item-amount span,
+.preview-sheet .item-amount strong {
+  display: block;
+}
+
+.preview-sheet .item-amount strong {
+  margin-top: 1px;
+  font-size: 8.5px;
+}
+
+.preview-sheet .blank-item-row td {
+  height: 7.8mm;
+}
+
+.preview-sheet .continuation-page {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 2px dashed #9ca3af;
+}
+
+.preview-sheet .continuation-context {
+  border: 1px solid #111827;
+  border-bottom: 0;
+  padding: 4px 6px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.preview-sheet .closing-block {
+  padding: 0 6px 2px;
 }
 </style>

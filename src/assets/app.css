@@ -761,20 +761,6 @@ html[data-theme="light"] div[style*="background: #0f172a"] span[style*="color: #
   transform: translateY(-4px);
 }
 
-/* ── Sayfa geçiş efekti (router-view) ────────────── */
-.page-fade-enter-active,
-.page-fade-leave-active {
-  transition: opacity 0.18s ease, transform 0.18s ease;
-}
-.page-fade-enter-from {
-  opacity: 0;
-  transform: translateY(6px);
-}
-.page-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
-}
-
 /* ── Tema geçiş animasyonu ────────────────────────── */
 html,
 body,

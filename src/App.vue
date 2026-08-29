@@ -842,7 +842,7 @@ onUnmounted(() => {
         <div class="brand-hero">
           <div class="brand-logo-frame">
             <img
-              src="/icon.ico"
+              src="/logo.png"
               alt="Kâtip"
               class="brand-logo"
             />
@@ -994,9 +994,7 @@ v-for="item in menuItems.slice(6, 9)"
 
     <main class="app-content">
       <router-view v-slot="{ Component }">
-        <Transition name="page-fade" mode="out-in">
-          <component :is="Component" />
-        </Transition>
+        <component :is="Component" />
       </router-view>
     </main>
   </div>
@@ -1850,12 +1848,32 @@ v-for="item in menuItems.slice(6, 9)"
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.2));
 }
 
+:global(html[data-theme="light"]) .brand-logo-frame {
+  background: #ffffff;
+  border-color: #d7dee8;
+  box-shadow: 0 8px 18px rgba(30, 64, 105, 0.10), 0 0 18px rgba(45, 125, 210, 0.10);
+}
+
+:global(html[data-theme="light"]) .brand-logo {
+  filter: drop-shadow(0 4px 8px rgba(30, 64, 105, 0.10));
+}
+
+:global(html[data-theme="light"]) .login-card {
+  box-shadow: var(--shadow-xl);
+}
+
 .brand-hero h1 {
   margin: 0;
   font-size: 26px;
   font-weight: 800;
   letter-spacing: -0.02em;
   background: linear-gradient(to right, #ffffff, #8fa5be);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+:global(html[data-theme="light"]) .brand-hero h1 {
+  background: linear-gradient(to right, #0f172a, #475569);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
