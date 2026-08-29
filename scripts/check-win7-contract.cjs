@@ -18,6 +18,7 @@ const checks = [
   ['lockfile better-sqlite3 9.6.0 çözmeli', lock.packages['node_modules/better-sqlite3']?.version === '9.6.0'],
   ['preload CommonJS .js çıkışı kullanılmalı', main.includes("path.join(__dirname, 'preload.js')")],
   ['Win7 NodeHttpExecutor korunmalı', main.includes("import { NodeHttpExecutor } from './nodeHttpExecutor.js'") && main.includes('new NodeHttpExecutor()')],
+  ['x86 metin çizimi için donanım hızlandırma kapalı olmalı', main.includes('app.disableHardwareAcceleration()')],
   ['NSIS hedefi ia32 olmalı', /"arch"\s*:\s*\[\s*"ia32"\s*\]/m.test(builder)],
   ['x86 artefakt adı korunmalı', builder.includes('Katip-Windows-x86-${version}-Setup.${ext}')],
   ['updater katip-32bit reposunu hedeflemeli', /"repo"\s*:\s*"katip-32bit"/.test(builder)],

@@ -11,6 +11,11 @@ import { fotografSemasiniTanimla, fotografProtokolunuKaydet } from './photoProto
 import { getActiveMasterSession } from './session.js'
 import { destekModundaYasakMi, DESTEK_ENGEL_MESAJI } from './permissions.js'
 
+// Electron 22 ia32, bazı eski Windows ekran kartı sürücülerinde metin katmanlarını
+// boş çizebiliyor. Kâtip'in arayüzü GPU gerektirmediği için x86 sürümünde yazılım
+// çizimini zorunlu tut; kayıtlı tema ne olursa olsun yazılar görünür kalsın.
+app.disableHardwareAcceleration()
+
 // Tüm console.log/warn/error çağrılarını kalıcı log dosyasına da yazar
 // (app.getPath('logs') altında dönen dosya; Ayarlar > Log Klasörünü Aç ile açılan klasörle aynı)
 log.initialize()
