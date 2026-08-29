@@ -125,7 +125,8 @@ const servisFisiYazdirGercek = async () => {
               <tr>
                 <th style="width: 24px;" class="center">#</th>
                 <th>Parça / İşçilik Açıklaması</th>
-                <th style="width: 62px;" class="center">Adet / Tutar</th>
+                <th style="width: 34px;" class="center">Adet</th>
+                <th style="width: 68px;" class="center">Tutar</th>
               </tr>
             </thead>
             <tbody>
@@ -139,12 +140,8 @@ const servisFisiYazdirGercek = async () => {
                       <span class="item-unit-price">Birim: ${guvenliMetin(tlFormatla(kalem.unit_price))}</span>
                     ` : ''}
                   </td>
-                  <td class="center item-amount">
-                    ${kalem ? `
-                      <span>${guvenliMetin(kalem.quantity || 0)}</span>
-                      <strong>${guvenliMetin(tlFormatla(kalem.total_price))}</strong>
-                    ` : ''}
-                  </td>
+                  <td class="center item-quantity">${kalem ? guvenliMetin(kalem.quantity || 0) : ''}</td>
+                  <td class="right item-amount">${kalem ? `<strong>${guvenliMetin(tlFormatla(kalem.total_price))}</strong>` : ''}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -794,7 +791,8 @@ ${showPayment ? `
                     <tr>
                       <th style="width: 24px;" class="center">#</th>
                       <th>Parça / İşçilik Açıklaması</th>
-                      <th style="width: 62px;" class="center">Adet / Tutar</th>
+                      <th style="width: 34px;" class="center">Adet</th>
+                      <th style="width: 68px;" class="center">Tutar</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -807,11 +805,9 @@ ${showPayment ? `
                           <span class="item-unit-price">Birim: {{ tlFormatla(satir.kalem.unit_price) }}</span>
                         </template>
                       </td>
-                      <td class="center item-amount">
-                        <template v-if="satir.kalem">
-                          <span>{{ satir.kalem.quantity || 0 }}</span>
-                          <strong>{{ tlFormatla(satir.kalem.total_price) }}</strong>
-                        </template>
+                      <td class="center item-quantity">{{ satir.kalem ? (satir.kalem.quantity || 0) : '' }}</td>
+                      <td class="right item-amount">
+                        <strong v-if="satir.kalem">{{ tlFormatla(satir.kalem.total_price) }}</strong>
                       </td>
                     </tr>
                   </tbody>
