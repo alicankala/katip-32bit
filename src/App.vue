@@ -1848,17 +1848,17 @@ v-for="item in menuItems.slice(6, 9)"
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.2));
 }
 
-:global(html[data-theme="light"]) .brand-logo-frame {
+:global(html[data-theme="light"] .brand-logo-frame) {
   background: #ffffff;
   border-color: #d7dee8;
   box-shadow: 0 8px 18px rgba(30, 64, 105, 0.10), 0 0 18px rgba(45, 125, 210, 0.10);
 }
 
-:global(html[data-theme="light"]) .brand-logo {
+:global(html[data-theme="light"] .brand-logo) {
   filter: drop-shadow(0 4px 8px rgba(30, 64, 105, 0.10));
 }
 
-:global(html[data-theme="light"]) .login-card {
+:global(html[data-theme="light"] .login-card) {
   box-shadow: var(--shadow-xl);
 }
 
@@ -1872,7 +1872,7 @@ v-for="item in menuItems.slice(6, 9)"
   -webkit-text-fill-color: transparent;
 }
 
-:global(html[data-theme="light"]) .brand-hero h1 {
+:global(html[data-theme="light"] .brand-hero h1) {
   background: linear-gradient(to right, #0f172a, #475569);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
