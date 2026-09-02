@@ -9,7 +9,7 @@ import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
 const RESULT_PREFIX = 'KATIP_INTEGRATION_RESULT:'
-const CURRENT_SCHEMA_VERSION = 32
+const CURRENT_SCHEMA_VERSION = 34
 
 const EXPECTED_TABLES = [
   'account_payments',
