@@ -42,11 +42,11 @@ export const yardimBolumleri = [
         baslik: 'Ekranın bölümleri',
         ozet: 'Sol menü, üst şerit ve ana panelin ne işe yaradığı.',
         adimlar: [
-          'Sol menü üç grup halindedir: Operasyon (Ana Sayfa, Servis Kabul, İş Emirleri), Kayıtlar (Müşteriler, Araçlar, Parça / Stok), Finans & Raporlar (Cari Hesap, İç Kâr Raporu, Gün Sonu).',
+          'Sol menü üç grup halindedir: Operasyon (Ana Sayfa, Servis Kabul, İş Emirleri), Kayıtlar (Müşteriler, Araçlar, Parça / Stok), Finans & Raporlar (Finans, Gün Sonu).',
           'Üst çubukta, sağ tarafta telefon simgesinin solunda aktif ustanın adı ve çıkış düğmesi bulunur.',
           'Sol menünün en altında Yardım ve Ayarlar bulunur.',
           'Her ekranın başlığının yanındaki küçük "?" düğmesi, doğrudan o ekranın anlatımını açar.',
-          'Üst şeritteki telefon simgesi mobil erişimi, dairesel ok simgesi ise verileri yenilemeyi açar.',
+          'Üst şeritteki telefon simgesi mobil erişimi açar; dairesel ok simgesi veritabanını, açık ekranı ve bilgi şeridini yeniden yükler.',
           'Sol alttaki küçük kutu sırayla saat, tarih, döviz kuru ve hava durumunu gösterir.'
         ]
       },
@@ -189,7 +189,7 @@ export const yardimBolumleri = [
           'Alış fiyatı ve satış fiyatını girin; kâr hesabı alış fiyatı üzerinden yapılır.',
           'Stok adedini ve kritik stok seviyesini belirleyip kaydedin.'
         ],
-        ipucu: 'Alış fiyatını doğru girmek önemlidir: İç Kâr Raporu bu bilgiye göre hesaplanır.'
+        ipucu: 'Alış fiyatını doğru girmek önemlidir: Finans ekranındaki Kârlılık sekmesi bu bilgiye göre hesaplanır.'
       },
       {
         id: 'kritik-stok',
@@ -210,13 +210,15 @@ export const yardimBolumleri = [
     konular: [
       {
         id: 'cari',
-        baslik: 'Cari hesap (alacak ve borç takibi)',
-        ozet: 'Müşteri alacaklarını ve tedarikçi borçlarını izleme.',
+        baslik: 'Borç ve tedarikçi takibi',
+        ozet: 'Tedarikçi ve taşeronlara olan borçları izleme.',
         adimlar: [
-          '"Cari Hesap" ekranını açın.',
-          'Müşteri veya tedarikçi için cari hesap kartı oluşturun.',
-          'Alacak/borç doğuran işlemleri "işlem" olarak, tahsilat ve ödemeleri "ödeme" olarak girin.',
-          'Kartın bakiyesi işlemler ile ödemelerin farkından oluşur.'
+          '"Finans" ekranını açın.',
+          'Üstten veya Borçlar sekmesinden "Yeni Borç Ekle" düğmesine basın.',
+          'Kişi/firma adını yazın; geçmişte kayıtlıysa öneriden seçin.',
+          'Yeni bir kişi veya firmaysa yeni hesap seçeneğini onaylayıp borç bilgilerini aynı pencerede girin.',
+          'Yaptığınız ödemeleri ilgili tedarikçinin "Öde" düğmesinden kaydedin.',
+          'Müşteri alacaklarını Alacaklar sekmesinde iş emirlerine bağlı olarak takip edin.'
         ],
         ipucu: 'İş emri kapatılırken tahsil edilmeyen tutar müşterinin alacak bakiyesine kendiliğinden yansır.'
       },
@@ -225,19 +227,22 @@ export const yardimBolumleri = [
         baslik: 'Genel gider kaydetme',
         ozet: 'Kira, elektrik, yakıt gibi dükkan giderlerini işleme.',
         adimlar: [
-          '"Cari Hesap" ekranındaki giderler bölümünü açın.',
+          '"Finans" ekranındaki Giderler sekmesini açın.',
           'Gideri adı, tutarı ve tarihiyle birlikte kaydedin.',
+          'Her ay tekrarlanan internet, kira veya aboneliklerde kayıt şeklini "Her Ay Otomatik" seçin.',
+          'Sabit fiyatın geçerli olduğu taahhüt bitişini girin; bu tarihten sonra yeni aylık kayıt oluşturulmaz.',
+          'Taahhüt bitince çıkan "Yeni Tutarla Yenile" düğmesinden güncel fiyatı ve yeni bitiş tarihini girin.',
           'Gider ödendiyse ödeme tarihini ve yöntemini mutlaka girin.',
           'Ödenen giderler ilgili günün Gün Sonu çıkışlarında görünür.'
         ],
-        ipucu: 'Ödeme tarihi boş bırakılan "Ödendi" giderler gün sonu raporuna düşmez; bu yüzden tarih alanı zorunlu tutulur.'
+        ipucu: 'Aylık döngü yalnızca zamanı gelen ayları oluşturur; gelecek ayları önceden borç toplamına eklemez.'
       },
       {
         id: 'kar-raporu',
         baslik: 'İç kâr raporu',
         ozet: 'Parça ve işçilik kârının dönemsel özeti.',
         adimlar: [
-          '"İç Kâr Raporu" ekranını açın.',
+          '"Finans" ekranındaki Kârlılık sekmesini açın.',
           'Bakmak istediğiniz tarih aralığını seçin.',
           'Rapor, satış tutarı ile parça alış maliyeti arasındaki farkı gösterir.',
           'Parça kârı ile işçilik kârını ayrı ayrı inceleyebilirsiniz.'

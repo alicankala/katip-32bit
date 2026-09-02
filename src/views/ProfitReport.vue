@@ -7,6 +7,7 @@ import Dropdown from 'primevue/dropdown'
 import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
 import { useFormatters } from '../composables/useFormatters'
+import { genelVeriYenilemeIsleyicisi } from '../utils/dataRefresh.js'
 import HelpButton from '../components/HelpButton.vue'
 
 const rapor = ref([])
@@ -155,12 +156,13 @@ const giderOzeti = computed(() => {
 })
 
 const cariOzeti = computed(() => {
-  let alacaklar = 0
   let borclar = 0
 
   const hasDateFilter = !!(baslangicTarihi.value || bitisTarihi.value);
 
   for (const acc of cariler.value) {
+    if ((acc.direction || 'Borç') !== 'Borç') continue
+
     let remaining = 0;
     if (hasDateFilter) {
       let debt = 0;
@@ -186,27 +188,10 @@ const cariOzeti = computed(() => {
       remaining = Number(acc.remaining_debt || 0);
     }
 
-    const dir = acc.direction || 'Borç';
-    if (dir === 'Borç') {
-      if (remaining > 0) {
-        borclar += remaining;
-      } else if (remaining < 0) {
-        alacaklar += Math.abs(remaining);
-      }
-    } else { // Alacak
-      if (remaining > 0) {
-        alacaklar += remaining;
-      } else if (remaining < 0) {
-        borclar += Math.abs(remaining);
-      }
-    }
+    if (remaining > 0) borclar += remaining;
   }
 
-  return {
-    alacaklar,
-    borclar,
-    netDurum: alacaklar - borclar
-  };
+  return { borclar };
 })
 
 const { tlFormatla, tarihSaatFormatla: tarihFormatla } = useFormatters()
@@ -233,13 +218,15 @@ const karSeverity = (netKar) => {
   return 'secondary'
 }
 
+const genelYenileme = genelVeriYenilemeIsleyicisi(raporuGetir)
+
 onMounted(() => {
   raporuGetir()
-  window.addEventListener('app-data-refreshed', raporuGetir)
+  window.addEventListener('app-data-refreshed', genelYenileme)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('app-data-refreshed', raporuGetir)
+  window.removeEventListener('app-data-refreshed', genelYenileme)
 })
 </script>
 
@@ -338,28 +325,13 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- D) Cari Durum -->
-    <h3 class="finance-section-title">D) Cari Durum</h3>
-    <div class="finance-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 20px;">
-      <div class="summary-card">
-        <span>Toplam Cari Alacak</span>
-        <strong>{{ tlFormatla(cariOzeti.alacaklar) }}</strong>
-        <small style="font-size: 11px; opacity: 0.85;">Carilerden alacağımız olan tutar</small>
-      </div>
-      <div class="summary-card">
-        <span>Toplam Cari Borç</span>
+    <!-- D) Tedarikçi Borç Durumu -->
+    <h3 class="finance-section-title">D) Tedarikçi Borç Durumu</h3>
+    <div class="finance-grid" style="grid-template-columns: 1fr; margin-bottom: 20px;">
+      <div class="summary-card main" style="border-color: #ef4444;">
+        <span>Toplam Tedarikçi / Taşeron Borcu</span>
         <strong>{{ tlFormatla(cariOzeti.borclar) }}</strong>
-        <small style="font-size: 11px; opacity: 0.85;">Carilere ödeyeceğimiz borç tutarı</small>
-      </div>
-      <div class="summary-card main" :class="{ 'danger-card': cariOzeti.netDurum < 0, 'success-card': cariOzeti.netDurum >= 0 }">
-        <span>Net Cari Durum</span>
-        <strong>{{ tlFormatla(Math.abs(cariOzeti.netDurum)) }}</strong>
-        <small style="font-size: 12px; font-weight: bold; margin-top: 2px;">
-          {{ cariOzeti.netDurum >= 0 ? 'Net Alacaklıyız' : 'Net Borçluyuz' }}
-        </small>
-        <span style="font-size: 10px; opacity: 0.7; margin-top: 4px;">
-          {{ baslangicTarihi || bitisTarihi ? 'Seçili tarih aralığındaki hareketlere göredir.' : 'Toplam genel cari durumdur.' }}
-        </span>
+        <small style="font-size: 11px; opacity: 0.85;">Ödeme yapacağımız kişi ve firmaların kalan toplamı</small>
       </div>
     </div>
 
@@ -400,10 +372,8 @@ onUnmounted(() => {
           <div style="display: flex; align-items: flex-start; gap: 10px; padding-top: 12px; border-top: 1px solid #334155; margin-top: 4px;">
             <i class="pi pi-wallet" style="color: #a855f7; margin-top: 2px; font-size: 14px; flex-shrink: 0;" />
             <div>
-              Cari hesaplarda toplam alacaklarımız <strong>{{ tlFormatla(cariOzeti.alacaklar) }}</strong>, borçlarımız 
-              <strong>{{ tlFormatla(cariOzeti.borclar) }}</strong> olup, cari dengede 
-              <strong :style="{ color: cariOzeti.netDurum >= 0 ? '#34d399' : '#f87171' }">{{ cariOzeti.netDurum >= 0 ? 'Net Alacaklıyız' : 'Net Borçluyuz' }}</strong> 
-              (Bakiye: <strong>{{ tlFormatla(Math.abs(cariOzeti.netDurum)) }}</strong>).
+              Tedarikçi ve taşeron hesaplarında toplam <strong>{{ tlFormatla(cariOzeti.borclar) }}</strong> borcumuz bulunmaktadır.
+              Müşteri alacakları iş emirlerine bağlı olarak Finans ekranındaki Alacaklar sekmesinde takip edilir.
             </div>
           </div>
         </div>

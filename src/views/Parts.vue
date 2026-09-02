@@ -15,6 +15,7 @@ import EmptyState from '../components/EmptyState.vue'
 import HelpButton from '../components/HelpButton.vue'
 import DestekModuUyarisi from '../components/DestekModuUyarisi.vue'
 import { useYetki } from '../composables/useYetki.js'
+import { genelVeriYenilemeIsleyicisi } from '../utils/dataRefresh.js'
 
 const router = useRouter()
 const yardimaGit = (konu) => router.push({ path: '/help', query: { konu } })
@@ -331,14 +332,16 @@ const kaydet = async () => {
   }
 }
 
+const genelYenileme = genelVeriYenilemeIsleyicisi(listeyiGetir)
+
 onMounted(() => {
   aktifUsta.value = JSON.parse(localStorage.getItem('aktifUsta') || 'null')
   listeyiGetir()
-  window.addEventListener('app-data-refreshed', listeyiGetir)
+  window.addEventListener('app-data-refreshed', genelYenileme)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('app-data-refreshed', listeyiGetir)
+  window.removeEventListener('app-data-refreshed', genelYenileme)
 })
 </script>
 

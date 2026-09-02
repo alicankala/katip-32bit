@@ -28,12 +28,13 @@ const emit = defineEmits([
   'add-expense',
   'quick-pay',
   'edit-expense',
-  'delete-expense'
+  'delete-expense',
+  'renew-cycle'
 ])
 
 const aramaMetni = ref('')
 const seciliTurFiltresi = ref('Tümü')
-const seciliDurumFiltresi = ref('Tümü')
+const seciliDurumFiltresi = ref('Ödenmedi')
 const seciliZamanFiltresi = ref('Tümü')
 
 const bugununTarihi = () => new Date().toISOString().slice(0, 10)
@@ -112,6 +113,23 @@ const istatistikler = computed(() => {
 })
 
 const { tlFormatla, tarihFormatla } = useFormatters()
+
+const bitenGiderDonguleri = computed(() => {
+  const bugun = bugununTarihi()
+  return props.expenses.filter((gider) => (
+    gider.recurrence_type === 'Aylık' &&
+    Number(gider.recurrence_root_id) === Number(gider.id) &&
+    gider.recurrence_end_date &&
+    gider.recurrence_end_date < bugun &&
+    !gider.recurrence_renewed_by_id
+  ))
+})
+
+const giderDongusuBitti = (gider) => (
+  gider.recurrence_type === 'Aylık' &&
+  gider.recurrence_end_date &&
+  gider.recurrence_end_date < bugununTarihi()
+)
 </script>
 
 <template>
@@ -134,6 +152,27 @@ const { tlFormatla, tarihFormatla } = useFormatters()
         <div class="expense-stat-label">Yaklaşan Ödemeler</div>
         <div class="expense-stat-value text-orange">{{ tlFormatla(istatistikler.yaklasanTutar) }}</div>
         <div class="expense-stat-sub">{{ istatistikler.yaklasanAdet }} fatura / ödeme yaklaşıyor</div>
+      </div>
+    </div>
+
+    <div v-if="bitenGiderDonguleri.length" class="expired-cycles">
+      <div class="expired-cycles-title">
+        <i class="pi pi-exclamation-circle" />
+        Taahhüdü biten aylık giderler
+      </div>
+      <div v-for="gider in bitenGiderDonguleri" :key="gider.id" class="expired-cycle-row">
+        <div>
+          <strong>{{ gider.company_name || gider.expense_type }}</strong>
+          <small>{{ gider.expense_type }} · Eski tutar {{ tlFormatla(gider.amount) }} · {{ tarihFormatla(gider.recurrence_end_date) }} tarihinde bitti</small>
+        </div>
+        <Button
+          label="Yeni Tutarla Yenile"
+          icon="pi pi-refresh"
+          severity="warning"
+          size="small"
+          :disabled="destekModu"
+          @click="emit('renew-cycle', gider)"
+        />
       </div>
     </div>
 
@@ -168,7 +207,7 @@ const { tlFormatla, tarihFormatla } = useFormatters()
       </div>
 
       <Button
-        label="Yeni Gider Kaydı Ekle"
+        label="Yeni Gider Ekle"
         icon="pi pi-plus"
         severity="warning"
         size="small"
@@ -212,7 +251,16 @@ const { tlFormatla, tarihFormatla } = useFormatters()
         </template>
       </Column>
 
-      <Column field="expense_type" header="Gider Türü" style="width: 140px;"></Column>
+      <Column field="expense_type" header="Gider Türü" style="width: 155px;">
+        <template #body="slotProps">
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 4px;">
+            <span>{{ slotProps.data.expense_type }}</span>
+            <span v-if="slotProps.data.recurrence_type === 'Aylık'" class="cycle-badge" :class="{ expired: giderDongusuBitti(slotProps.data) }">
+              <i class="pi pi-sync" /> {{ giderDongusuBitti(slotProps.data) ? 'Taahhüt Bitti' : 'Aylık' }}
+            </span>
+          </div>
+        </template>
+      </Column>
       <Column field="period" header="Dönem" style="width: 110px;"></Column>
 
       <Column header="Gider Tarihi" style="width: 110px;">
@@ -332,6 +380,61 @@ const { tlFormatla, tarihFormatla } = useFormatters()
 .text-green  { color: #10b981 !important; }
 .text-red    { color: #ef4444 !important; }
 .text-orange { color: #f59e0b !important; }
+
+.expired-cycles {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.expired-cycles-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+.expired-cycle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 10px;
+  background: var(--bg-active-box, #0f172a);
+  border-radius: 8px;
+}
+
+.expired-cycle-row > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.expired-cycle-row small {
+  color: var(--text-secondary, #94a3b8);
+}
+
+.cycle-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.12);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.cycle-badge.expired {
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.12);
+}
 
 @media (max-width: 900px) {
   .expenses-stats-row {

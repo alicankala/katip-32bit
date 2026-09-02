@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import Paginator from 'primevue/paginator'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
@@ -11,7 +11,7 @@ import Textarea from 'primevue/textarea'
 import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import PrintPreviewDialog from '../components/work-orders/PrintPreviewDialog.vue'
 import EditItemDialog from '../components/work-orders/EditItemDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
@@ -19,8 +19,10 @@ import HelpButton from '../components/HelpButton.vue'
 import DestekModuUyarisi from '../components/DestekModuUyarisi.vue'
 import { useFormatters } from '../composables/useFormatters'
 import { useYetki } from '../composables/useYetki.js'
+import { genelVeriYenilemeIsleyicisi } from '../utils/dataRefresh.js'
 
 const router = useRouter()
+const route = useRoute()
 const yardimaGit = (konu) => router.push({ path: '/help', query: { konu } })
 const servisKabuleGit = () => router.push('/service-reception')
 
@@ -137,6 +139,7 @@ const seciliIsEmri = ref(null)
 const islemGecmisiAcik = ref(false)
 const maliyetKarAcik = ref(false)
 const printPreviewOpen = ref(false)
+const bosServisFisi = ref(false)
 const showPaymentSummary = ref(true)
 
 const odemeDurumuHesapla = (row) => {
@@ -1263,7 +1266,7 @@ const ayariBooleanYap = (val, varsayilan = true) => {
   return Boolean(val)
 }
 
-const servisFisiYazdir = async () => {
+const servisFisiOnizle = async (bosKalemModu = false) => {
   // Load setting before opening preview
   let show = true
   try {
@@ -1273,8 +1276,12 @@ const servisFisiYazdir = async () => {
     }
   } catch (e) { console.error('Ayar getirilemedi', e) }
   showPaymentSummary.value = show
+  bosServisFisi.value = bosKalemModu
   printPreviewOpen.value = true
 }
+
+const servisFisiYazdir = () => servisFisiOnizle(false)
+const bosServisFisiYazdir = () => servisFisiOnizle(true)
 
 const verileriYenileDetayli = async () => {
   await listeleriGetir()
@@ -1290,6 +1297,24 @@ const verileriYenileDetayli = async () => {
       odemeGecmisi.value = []
     }
   }
+}
+
+const genelYenileme = genelVeriYenilemeIsleyicisi(verileriYenileDetayli)
+
+const rotadakiIsEmriniAc = async () => {
+  const isEmriId = Number(route.query.open)
+  if (!isEmriId) return
+
+  const hedefIsEmri = isEmirleri.value.find((isEmri) => Number(isEmri.id) === isEmriId)
+  if (!hedefIsEmri) {
+    uyariMesaji('Açılmak istenen iş emri bulunamadı.')
+    return
+  }
+
+  durumFiltresi.value = hedefIsEmri.status || 'Tümü'
+  await kalemleriAc(hedefIsEmri)
+  await nextTick()
+  document.querySelector('.inline-kalem-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 onMounted(async () => {
@@ -1309,13 +1334,14 @@ onMounted(async () => {
     }
   }
 
-  listeleriGetir()
+  await listeleriGetir()
   kategoriOnerileriniYukle()
-  window.addEventListener('app-data-refreshed', verileriYenileDetayli)
+  await rotadakiIsEmriniAc()
+  window.addEventListener('app-data-refreshed', genelYenileme)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('app-data-refreshed', verileriYenileDetayli)
+  window.removeEventListener('app-data-refreshed', genelYenileme)
 })
 </script>
 
@@ -1843,6 +1869,7 @@ onUnmounted(() => {
       v-model:visible="printPreviewOpen"
       :seciliIsEmri="seciliIsEmri"
       :kalemler="kalemler"
+      :bosKalemModu="bosServisFisi"
       :showPaymentSummary="showPaymentSummary"
       :odemeOzeti="odemeOzeti"
       @error="hataMesaji"
@@ -1889,24 +1916,33 @@ onUnmounted(() => {
     {{ tlFormatla(seciliIsEmri.total_price) }}
   </h2>
 
-  <Button
-    label="Servis Fişi Yazdır"
-    icon="pi pi-print"
-    size="small"
-    severity="secondary"
-    @click="servisFisiYazdir"
-  />
-  <Button
-  v-if="seciliIsEmriTamamlandi"
-  label="Tekrar Aç"
-  icon="pi pi-undo"
-  size="small"
-  severity="warning"
-  outlined
-  style="margin-top: 8px;"
-  :disabled="destekModu"
-  @click.stop="tekrarAc(seciliIsEmri)"
-/>
+  <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+    <Button
+      label="Servis Fişi Yazdır"
+      icon="pi pi-print"
+      size="small"
+      severity="secondary"
+      @click="servisFisiYazdir"
+    />
+    <Button
+      label="Boş Servis Fişi Yazdır"
+      icon="pi pi-file-edit"
+      size="small"
+      severity="secondary"
+      outlined
+      @click="bosServisFisiYazdir"
+    />
+    <Button
+      v-if="seciliIsEmriTamamlandi"
+      label="Tekrar Aç"
+      icon="pi pi-undo"
+      size="small"
+      severity="warning"
+      outlined
+      :disabled="destekModu"
+      @click.stop="tekrarAc(seciliIsEmri)"
+    />
+  </div>
 </div>
           </div>
         </div>

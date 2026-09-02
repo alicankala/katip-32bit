@@ -26,7 +26,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
-  'add-cari',
+  'add-debt',
   'select-cari',
   'add-transaction',
   'add-payment',
@@ -36,7 +36,7 @@ const emit = defineEmits([
 
 const aramaMetni = ref('')
 const seciliTipFiltresi = ref(null)
-const sadeceBorclular = ref(false)
+const sadeceBorclular = ref(true)
 
 const filtrelenmisTedarikciler = computed(() => {
   // Sadece Tedarikçi/Taşeron Borç yönlü cariler
@@ -110,12 +110,12 @@ const getCariTipClass = (type) => {
       </div>
 
       <Button
-        label="Yeni Cari Hesap Ekle"
+        label="Yeni Borç Ekle"
         icon="pi pi-plus"
-        severity="info"
+        severity="danger"
         size="small"
         :disabled="destekModu"
-        @click="emit('add-cari')"
+        @click="emit('add-debt')"
       />
     </div>
 
@@ -138,13 +138,13 @@ const getCariTipClass = (type) => {
         <EmptyState
           v-else
           icon="pi pi-truck"
-          title="Henüz tedarikçi hesabı yok"
-          description="Parça aldığınız tedarikçileri ve çalıştığınız taşeronları buraya ekleyin; borçlarınızı ve yaptığınız ödemeleri bu ekrandan takip edersiniz."
-          action-label="Yeni Cari Ekle"
+          title="Henüz borç kaydı yok"
+          description="Kişi veya firma adını elle yazabilir ya da geçmiş kayıtlarınızdan seçerek ilk borcunuzu ekleyebilirsiniz."
+          action-label="Yeni Borç Ekle"
           action-icon="pi pi-plus"
           compact
           :action-disabled="destekModu"
-          @action="emit('add-cari')"
+          @action="emit('add-debt')"
         />
       </template>
 

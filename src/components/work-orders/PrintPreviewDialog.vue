@@ -18,6 +18,10 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
+  bosKalemModu: {
+    type: Boolean,
+    default: false
+  },
   showPaymentSummary: {
     type: Boolean,
     default: true
@@ -70,7 +74,9 @@ const kalemSayfalariniOlustur = (kalemler) => {
   ))
 }
 
-const onizlemeKalemSayfalari = computed(() => kalemSayfalariniOlustur(props.kalemler))
+const onizlemeKalemSayfalari = computed(() => (
+  kalemSayfalariniOlustur(props.bosKalemModu ? [] : props.kalemler)
+))
 
 const guvenliMetin = (deger) => {
   return String(deger ?? '')
@@ -109,8 +115,9 @@ const servisFisiYazdirGercek = async () => {
   const isEmri = props.seciliIsEmri
 
   const firma = firmaBilgileri
+  const yazdirilacakKalemler = props.bosKalemModu ? [] : props.kalemler
 
-  const kalemSayfalariHtml = kalemSayfalariniOlustur(props.kalemler).map((sayfa, sayfaIndex) => `
+  const kalemSayfalariHtml = kalemSayfalariniOlustur(yazdirilacakKalemler).map((sayfa, sayfaIndex) => `
     <div class="items-page ${sayfaIndex > 0 ? 'continuation-page' : ''}">
       ${sayfaIndex > 0 ? `
         <div class="continuation-context">
@@ -125,23 +132,25 @@ const servisFisiYazdirGercek = async () => {
               <tr>
                 <th style="width: 24px;" class="center">#</th>
                 <th>Parça / İşçilik Açıklaması</th>
-                <th style="width: 62px;" class="center">Adet / Tutar</th>
+                <th style="width: 34px;" class="center">Adet</th>
+                <th style="width: 62px;" class="center">Tutar</th>
               </tr>
             </thead>
             <tbody>
               ${satirlar.map(({ sira, kalem }) => `
                 <tr class="blank-item-row">
                   <td class="center">${sira}</td>
-                  <td>
+                  <td class="item-description">
                     ${kalem ? `
                       <span class="item-kind">${guvenliMetin(kalem.type === 'Parça' ? 'P' : 'İ')}</span>
                       ${guvenliMetin(kalemAciklamasi(kalem))}
-                      <span class="item-unit-price">Birim: ${guvenliMetin(tlFormatla(kalem.unit_price))}</span>
                     ` : ''}
+                  </td>
+                  <td class="center item-quantity">
+                    ${kalem ? guvenliMetin(kalem.quantity || 0) : ''}
                   </td>
                   <td class="center item-amount">
                     ${kalem ? `
-                      <span>${guvenliMetin(kalem.quantity || 0)}</span>
                       <strong>${guvenliMetin(tlFormatla(kalem.total_price))}</strong>
                     ` : ''}
                   </td>
@@ -154,7 +163,7 @@ const servisFisiYazdirGercek = async () => {
     </div>
   `).join('')
 
-  const toplamTutar = props.kalemler.reduce((toplam, kalem) => {
+  const toplamTutar = yazdirilacakKalemler.reduce((toplam, kalem) => {
     return toplam + Number(kalem.total_price || 0)
   }, 0)
 
@@ -463,21 +472,24 @@ const servisFisiYazdirGercek = async () => {
             font-weight: 900;
           }
 
-          .item-unit-price {
-            display: block;
-            margin-top: 1px;
-            color: #6b7280;
-            font-size: 8.5px;
-          }
-
-          .item-amount span,
           .item-amount strong {
             display: block;
           }
 
           .item-amount strong {
-            margin-top: 1px;
             font-size: 8.5px;
+          }
+
+          .item-description,
+          .item-quantity,
+          .item-amount {
+            vertical-align: middle;
+          }
+
+          .manual-total-space {
+            display: inline-block;
+            min-width: 88px;
+            min-height: 14px;
           }
 
           .blank-item-row td {
@@ -655,7 +667,16 @@ const servisFisiYazdirGercek = async () => {
               ${kalemSayfalariHtml}
 
               <div class="closing-block">
-${props.kalemler.length > 0 ? `
+${props.bosKalemModu ? `
+                <div class="total-area">
+                  <div class="total-box">
+                    <div class="total-row">
+                      <span>Genel Toplam</span>
+                      <span class="manual-total-space">&nbsp;</span>
+                    </div>
+                  </div>
+                </div>
+` : yazdirilacakKalemler.length > 0 ? `
                 <div class="total-area">
                   <div class="total-box">
                     <div class="total-row">
@@ -709,7 +730,7 @@ ${showPayment ? `
 <template>
   <Dialog
     v-model:visible="show"
-    header="Servis Fişi Önizleme"
+    :header="bosKalemModu ? 'Boş Servis Fişi Önizleme' : 'Servis Fişi Önizleme'"
     :style="{ width: '850px' }"
     modal
   >
@@ -794,22 +815,24 @@ ${showPayment ? `
                     <tr>
                       <th style="width: 24px;" class="center">#</th>
                       <th>Parça / İşçilik Açıklaması</th>
-                      <th style="width: 62px;" class="center">Adet / Tutar</th>
+                      <th style="width: 34px;" class="center">Adet</th>
+                      <th style="width: 62px;" class="center">Tutar</th>
                     </tr>
                   </thead>
                   <tbody>
                     <tr v-for="satir in satirlar" :key="satir.sira" class="blank-item-row">
                       <td class="center">{{ satir.sira }}</td>
-                      <td>
+                      <td class="item-description">
                         <template v-if="satir.kalem">
                           <span class="item-kind">{{ satir.kalem.type === 'Parça' ? 'P' : 'İ' }}</span>
                           {{ kalemAciklamasi(satir.kalem) }}
-                          <span class="item-unit-price">Birim: {{ tlFormatla(satir.kalem.unit_price) }}</span>
                         </template>
+                      </td>
+                      <td class="center item-quantity">
+                        <template v-if="satir.kalem">{{ satir.kalem.quantity || 0 }}</template>
                       </td>
                       <td class="center item-amount">
                         <template v-if="satir.kalem">
-                          <span>{{ satir.kalem.quantity || 0 }}</span>
                           <strong>{{ tlFormatla(satir.kalem.total_price) }}</strong>
                         </template>
                       </td>
@@ -820,21 +843,22 @@ ${showPayment ? `
             </div>
 
             <div class="closing-block">
-              <div v-if="kalemler.length > 0" class="total-area">
+              <div v-if="bosKalemModu || kalemler.length > 0" class="total-area">
                 <div class="total-box">
                   <div class="total-row">
                     <span>Genel Toplam</span>
-                    <span>{{ tlFormatla(kalemler.reduce((toplam, kalem) => toplam + Number(kalem.total_price || 0), 0) || seciliIsEmri?.total_price) }}</span>
+                    <span v-if="!bosKalemModu">{{ tlFormatla(kalemler.reduce((toplam, kalem) => toplam + Number(kalem.total_price || 0), 0) || seciliIsEmri?.total_price) }}</span>
+                    <span v-else class="manual-total-space" aria-hidden="true"></span>
                   </div>
-                  <div v-if="showPaymentSummary" class="total-row payment-row">
+                  <div v-if="showPaymentSummary && !bosKalemModu" class="total-row payment-row">
                     <span>Tahsil Edilen</span>
                     <span>{{ tlFormatla(odemeOzeti.toplam_tahsilat) }}</span>
                   </div>
-                  <div v-if="showPaymentSummary" class="total-row payment-row">
+                  <div v-if="showPaymentSummary && !bosKalemModu" class="total-row payment-row">
                     <span>Kalan Borç</span>
                     <span>{{ tlFormatla(odemeOzeti.kalan_borc) }}</span>
                   </div>
-                  <div v-if="showPaymentSummary" class="total-row payment-row">
+                  <div v-if="showPaymentSummary && !bosKalemModu" class="total-row payment-row">
                     <span>Ödeme Durumu</span>
                     <span>{{ odemeOzeti.odeme_durumu }}</span>
                   </div>
@@ -1162,21 +1186,24 @@ ${showPayment ? `
   font-weight: 900;
 }
 
-.preview-sheet .item-unit-price {
-  display: block;
-  margin-top: 1px;
-  color: #6b7280;
-  font-size: 8.5px;
-}
-
-.preview-sheet .item-amount span,
 .preview-sheet .item-amount strong {
   display: block;
 }
 
 .preview-sheet .item-amount strong {
-  margin-top: 1px;
   font-size: 8.5px;
+}
+
+.preview-sheet .item-description,
+.preview-sheet .item-quantity,
+.preview-sheet .item-amount {
+  vertical-align: middle;
+}
+
+.preview-sheet .manual-total-space {
+  display: inline-block;
+  min-width: 88px;
+  min-height: 14px;
 }
 
 .preview-sheet .blank-item-row td {

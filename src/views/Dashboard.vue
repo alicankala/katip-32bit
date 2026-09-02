@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useFormatters } from '../composables/useFormatters'
+import { genelVeriYenilemeIsleyicisi } from '../utils/dataRefresh.js'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
@@ -350,14 +351,25 @@ const servisKabuleGit = () => {
   router.push('/service-reception')
 }
 
+const yeniBorcEklemeyeGit = () => {
+  router.push({ path: '/current-accounts', query: { tab: 'borclar', action: 'new-debt' } })
+}
+
 const isEmirlerineGit = () => {
   router.push('/work-orders')
 }
 
+const isEmriniAc = (isEmri) => {
+  if (!isEmri?.id) return
+  router.push({ path: '/work-orders', query: { open: String(isEmri.id) } })
+}
+
+const genelYenileme = genelVeriYenilemeIsleyicisi(verileriYukle)
+
 onMounted(() => {
   verileriYukle()
   window.addEventListener('click', closeSuggestionsOnOutsideClick)
-  window.addEventListener('app-data-refreshed', verileriYukle)
+  window.addEventListener('app-data-refreshed', genelYenileme)
 })
 
 onUnmounted(() => {
@@ -365,7 +377,7 @@ onUnmounted(() => {
     clearTimeout(debounceTimer)
   }
   window.removeEventListener('click', closeSuggestionsOnOutsideClick)
-  window.removeEventListener('app-data-refreshed', verileriYukle)
+  window.removeEventListener('app-data-refreshed', genelYenileme)
 })
 </script>
 
@@ -378,12 +390,20 @@ onUnmounted(() => {
         <h1 class="page-title">Servis Yönetim Paneli <HelpButton konu="ekran-duzeni" /></h1>
         <p class="page-subtitle">Günlük servis durumu, açık işler ve müşteri geçmişi</p>
       </div>
-      <Button
-        label="Yeni Servis Kabul"
-        icon="pi pi-bolt"
-        severity="success"
-        @click="servisKabuleGit"
-      />
+      <div class="dash-header-actions">
+        <Button
+          label="Yeni Servis Kabul"
+          icon="pi pi-bolt"
+          severity="success"
+          @click="servisKabuleGit"
+        />
+        <Button
+          label="Yeni Borç Ekle"
+          icon="pi pi-plus"
+          severity="danger"
+          @click="yeniBorcEklemeyeGit"
+        />
+      </div>
     </div>
 
     <!-- ── Stat Cards ──────────────────────────────── -->
@@ -492,7 +512,12 @@ onUnmounted(() => {
         </div>
 
         <div v-else-if="sonAcikIsEmirleri.length > 0" class="table-panel">
-          <DataTable :value="sonAcikIsEmirleri" responsiveLayout="scroll" class="p-datatable-sm">
+          <DataTable
+            :value="sonAcikIsEmirleri"
+            responsiveLayout="scroll"
+            class="p-datatable-sm clickable-work-orders"
+            @row-click="isEmriniAc($event.data)"
+          >
             <Column header="Tarih" style="width:130px">
               <template #body="slotProps">
                 <span class="cell-date">{{ tarihFormatla(slotProps.data.created_at) }}</span>
@@ -639,13 +664,13 @@ onUnmounted(() => {
         </div>
 
         <!-- Uzun Süredir Açık İş Emri Uyarısı -->
-        <div v-if="!yukleniyor && uzunSureAcikIsEmirleri.length > 0" class="long-open-box" @click="isEmirlerineGit">
+        <div v-if="!yukleniyor && uzunSureAcikIsEmirleri.length > 0" class="long-open-box">
           <div class="low-stock-header">
             <i class="pi pi-clock"></i>
             <h3>Uzun Süredir Açık İş Emri</h3>
           </div>
           <ul>
-            <li v-for="wo in uzunSureAcikIsEmirleri.slice(0, 5)" :key="wo.id">
+            <li v-for="wo in uzunSureAcikIsEmirleri.slice(0, 5)" :key="wo.id" @click="isEmriniAc(wo)">
               <strong>{{ wo.plate || 'PLAKASIZ' }}</strong>
               <span>{{ wo.customer_name || '-' }}</span>
               <em>{{ wo.gecenGun }} gün</em>
@@ -870,6 +895,22 @@ onUnmounted(() => {
 /* ── Header ─────────────────────────────────── */
 .dash-header {
   align-items: center;
+}
+
+.dash-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+:deep(.clickable-work-orders .p-datatable-tbody > tr) {
+  cursor: pointer;
+}
+
+:deep(.clickable-work-orders .p-datatable-tbody > tr:hover) {
+  background: var(--bg-hover, rgba(59, 130, 246, 0.08));
 }
 
 /* ── Stat Cards ─────────────────────────────── */

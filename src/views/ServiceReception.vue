@@ -9,6 +9,7 @@ import { useToast } from 'primevue/usetoast'
 import HelpButton from '../components/HelpButton.vue'
 import DestekModuUyarisi from '../components/DestekModuUyarisi.vue'
 import { useYetki } from '../composables/useYetki.js'
+import { genelVeriYenilemeIsleyicisi } from '../utils/dataRefresh.js'
 
 const router = useRouter()
 const toast = useToast()
@@ -343,14 +344,16 @@ const isEmriRes = await window.api.isEmriEkle({
   }
 }
 
+const genelYenileme = genelVeriYenilemeIsleyicisi(verileriYukle)
+
 onMounted(() => {
   aktifUsta.value = JSON.parse(localStorage.getItem('aktifUsta') || 'null')
   verileriYukle()
-  window.addEventListener('app-data-refreshed', verileriYukle)
+  window.addEventListener('app-data-refreshed', genelYenileme)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('app-data-refreshed', verileriYukle)
+  window.removeEventListener('app-data-refreshed', genelYenileme)
 })
 </script>
 

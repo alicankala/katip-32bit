@@ -7,6 +7,80 @@ function getErrorMessage(err: unknown): string {
 }
 
 const TARIH_FORMATI = /^\d{4}-\d{2}-\d{2}$/
+const AY_ADLARI = [
+  'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+  'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'
+]
+
+function tarihiAyKaydir(tarih: string, aySayisi: number): string | null {
+  const eslesme = TARIH_FORMATI.exec(String(tarih || ''))
+  if (!eslesme) return null
+
+  const [yil, ay, gun] = tarih.split('-').map(Number)
+  const toplamAy = yil * 12 + (ay - 1) + aySayisi
+  const hedefYil = Math.floor(toplamAy / 12)
+  const hedefAy = toplamAy % 12
+  const ayinSonGunu = new Date(Date.UTC(hedefYil, hedefAy + 1, 0)).getUTCDate()
+  const hedefGun = Math.min(gun, ayinSonGunu)
+  return `${hedefYil}-${String(hedefAy + 1).padStart(2, '0')}-${String(hedefGun).padStart(2, '0')}`
+}
+
+function aySirasi(tarih: string): number {
+  const [yil, ay] = String(tarih || '').split('-').map(Number)
+  return yil * 12 + (ay - 1)
+}
+
+// Aylık giderlerde gelecek aylar topluca oluşturulmaz. Ekran açıldığında yalnızca
+// gelmiş ayların eksik kayıtları tamamlanır; böylece bakiye bugünü doğru yansıtır.
+function aylikGiderKayitlariniOlustur() {
+  const simdi = new Date()
+  const buAySirasi = simdi.getFullYear() * 12 + simdi.getMonth()
+  const kokKayitlar = db.prepare(`
+    SELECT * FROM general_expenses
+    WHERE recurrence_type = 'Aylık'
+      AND recurrence_root_id = id
+      AND recurrence_renewed_by_id IS NULL
+  `).all() as any[]
+
+  const ekle = db.prepare(`
+    INSERT OR IGNORE INTO general_expenses (
+      expense_type, company_name, period, expense_date, due_date, amount,
+      status, payment_date, payment_method, note, recurrence_type,
+      recurrence_end_date, recurrence_root_id, recurrence_renewed_by_id
+    ) VALUES (?, ?, ?, ?, ?, ?, 'Ödenmedi', NULL, NULL, ?, 'Aylık', ?, ?, NULL)
+  `)
+
+  const eksikleriTamamla = db.transaction(() => {
+    for (const kok of kokKayitlar) {
+      const baslangicAySirasi = aySirasi(kok.expense_date)
+      if (!Number.isFinite(baslangicAySirasi)) continue
+
+      const enFazlaAy = Math.min(buAySirasi - baslangicAySirasi, 1200)
+      for (let ayFarki = 1; ayFarki <= enFazlaAy; ayFarki++) {
+        const giderTarihi = tarihiAyKaydir(kok.expense_date, ayFarki)
+        if (!giderTarihi) break
+        if (kok.recurrence_end_date && giderTarihi > kok.recurrence_end_date) break
+
+        const sonOdemeTarihi = kok.due_date ? tarihiAyKaydir(kok.due_date, ayFarki) : null
+        const [yil, ay] = giderTarihi.split('-').map(Number)
+        const donem = `${AY_ADLARI[ay - 1]} ${yil}`
+        ekle.run(
+          kok.expense_type,
+          kok.company_name,
+          donem,
+          giderTarihi,
+          sonOdemeTarihi,
+          Number(kok.amount) || 0,
+          kok.note,
+          kok.recurrence_end_date || null,
+          kok.id
+        )
+      }
+    }
+  })
+
+  eksikleriTamamla()
+}
 
 // Gider "Ödendi" ise ödeme tarihi ve yöntemi zorunludur; aksi halde gider hiçbir
 // günün gün sonu çıkışında görünmez. "Ödenmedi" durumunda bu alanlar temizlenir.
@@ -169,6 +243,7 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
       const vehicle_id = islem.vehicle_id ? Number(islem.vehicle_id) : null
       const work_order_id = islem.work_order_id ? Number(islem.work_order_id) : null
       const note = String(islem.note || '').trim()
+      const due_date = String(islem.due_date || '').trim() || null
 
       if (!current_account_id) {
         throw new Error('İşlem için cari hesap seçilmelidir.')
@@ -185,11 +260,11 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
 
       const stmt = db.prepare(`
         INSERT INTO account_transactions (
-          current_account_id, date, transaction_type, description, amount, vehicle_id, work_order_id, note
+          current_account_id, date, transaction_type, description, amount, vehicle_id, work_order_id, note, due_date
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
-      const info = stmt.run(current_account_id, date, transaction_type, description, amount, vehicle_id, work_order_id, note)
+      const info = stmt.run(current_account_id, date, transaction_type, description, amount, vehicle_id, work_order_id, note, due_date)
       return { success: true, id: info.lastInsertRowid }
     } catch (error) {
       console.error('Cari işlem ekleme hatası:', error)
@@ -306,6 +381,7 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
   // 11. Genel Giderler - Getir
   kanalEkle('giderleri-getir', () => {
     try {
+      aylikGiderKayitlariniOlustur()
       const giderler = db.prepare(`
         SELECT * FROM general_expenses
         ORDER BY expense_date DESC, id DESC
@@ -321,6 +397,8 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
   kanalEkle('gider-ekle', (_event, gider: any) => {
     try {
       const { expense_type, company_name, period, expense_date, due_date, amount, status, payment_date, payment_method, note } = gider
+      const recurrenceType = gider.recurrence_type === 'Aylık' ? 'Aylık' : 'Tek Seferlik'
+      const recurrenceEndDate = gider.recurrence_end_date ? String(gider.recurrence_end_date).trim() : null
 
       if (!expense_type || !String(expense_type).trim()) {
         throw new Error('Gider türü boş bırakılamaz.')
@@ -328,14 +406,19 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
       if (!expense_date || !String(expense_date).trim()) {
         throw new Error('Gider tarihi boş bırakılamaz.')
       }
+      if (recurrenceEndDate && (!TARIH_FORMATI.test(recurrenceEndDate) || recurrenceEndDate < String(expense_date).trim())) {
+        throw new Error('Taahhüt bitiş tarihi gider tarihinden önce olamaz.')
+      }
 
       const odemeAlanlari = giderOdemeAlanlariniDogrula(gider)
       kapaliGunKontrol(odemeAlanlari.payment_date)
 
-      db.prepare(`
+      const info = db.prepare(`
         INSERT INTO general_expenses (
-          expense_type, company_name, period, expense_date, due_date, amount, status, payment_date, payment_method, note
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          expense_type, company_name, period, expense_date, due_date, amount, status,
+          payment_date, payment_method, note, recurrence_type, recurrence_end_date,
+          recurrence_root_id, recurrence_renewed_by_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)
       `).run(
         String(expense_type).trim(),
         company_name ? String(company_name).trim() : null,
@@ -346,9 +429,26 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
         status || 'Ödenmedi',
         odemeAlanlari.payment_date,
         odemeAlanlari.payment_method,
-        note ? String(note).trim() : null
+        note ? String(note).trim() : null,
+        recurrenceType,
+        recurrenceEndDate
       )
-      return { success: true }
+      const yeniGiderId = Number(info.lastInsertRowid)
+
+      if (recurrenceType === 'Aylık') {
+        db.prepare('UPDATE general_expenses SET recurrence_root_id = ? WHERE id = ?').run(yeniGiderId, yeniGiderId)
+      }
+
+      const yenilenenKokId = Number(gider.renewed_from_root_id) || null
+      if (yenilenenKokId) {
+        db.prepare(`
+          UPDATE general_expenses
+          SET recurrence_renewed_by_id = ?
+          WHERE id = ? AND recurrence_root_id = id
+        `).run(yeniGiderId, yenilenenKokId)
+      }
+
+      return { success: true, id: yeniGiderId }
     } catch (error) {
       console.error('Gider ekleme hatası:', error)
       return { success: false, error: getErrorMessage(error) }
@@ -359,6 +459,8 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
   kanalEkle('gider-guncelle', (_event, gider: any) => {
     try {
       const { id, expense_type, company_name, period, expense_date, due_date, amount, status, payment_date, payment_method, note } = gider
+      const recurrenceType = gider.recurrence_type === 'Aylık' ? 'Aylık' : 'Tek Seferlik'
+      const recurrenceEndDate = gider.recurrence_end_date ? String(gider.recurrence_end_date).trim() : null
 
       if (!id) {
         throw new Error('Güncellenecek gider kaydı bulunamadı.')
@@ -368,6 +470,9 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
       }
       if (!expense_date || !String(expense_date).trim()) {
         throw new Error('Gider tarihi boş bırakılamaz.')
+      }
+      if (recurrenceEndDate && (!TARIH_FORMATI.test(recurrenceEndDate) || recurrenceEndDate < String(expense_date).trim())) {
+        throw new Error('Taahhüt bitiş tarihi gider tarihinden önce olamaz.')
       }
 
       const odemeAlanlari = giderOdemeAlanlariniDogrula(gider)
@@ -391,7 +496,9 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
             status = ?,
             payment_date = ?,
             payment_method = ?,
-            note = ?
+            note = ?,
+            recurrence_type = ?,
+            recurrence_end_date = ?
         WHERE id = ?
       `).run(
         String(expense_type).trim(),
@@ -404,6 +511,8 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
         odemeAlanlari.payment_date,
         odemeAlanlari.payment_method,
         note ? String(note).trim() : null,
+        recurrenceType,
+        recurrenceEndDate,
         Number(id)
       )
       return { success: true }

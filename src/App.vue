@@ -47,8 +47,7 @@ const menuItems = ref([
   { label: 'Müşteriler', icon: 'pi pi-users', path: '/customers', command: () => router.push('/customers') },
   { label: 'Araçlar', icon: 'pi pi-car', path: '/vehicles', command: () => router.push('/vehicles') },
   { label: 'Parça / Stok', icon: 'pi pi-box', path: '/parts', command: () => router.push('/parts') },
-  { label: 'Cari Hesap', icon: 'pi pi-wallet', path: '/current-accounts', command: () => router.push('/current-accounts') },
-  { label: 'İç Kâr Raporu', icon: 'pi pi-chart-line', path: '/profit-report', command: () => router.push('/profit-report') },
+  { label: 'Finans', icon: 'pi pi-wallet', path: '/current-accounts', command: () => router.push('/current-accounts') },
   { label: 'Gün Sonu', icon: 'pi pi-lock', path: '/daily-closing', command: () => router.push('/daily-closing') },
   { label: 'Ayarlar', icon: 'pi pi-cog', path: '/settings', command: () => router.push('/settings') },
   { label: 'Yardım', icon: 'pi pi-question-circle', path: '/help', command: () => router.push('/help') }
@@ -574,13 +573,36 @@ const verileriYenile = async () => {
   try {
     const res = await window.api.uygulamaVerileriniYenile()
     if (res?.success) {
+      const bekleyenSayfaYenilemeleri = []
+      const yenilemeOlayi = new CustomEvent('app-data-refreshed', {
+        detail: {
+          waitUntil(islem) {
+            if (islem && typeof islem.then === 'function') {
+              bekleyenSayfaYenilemeleri.push(Promise.resolve(islem))
+            }
+          }
+        }
+      })
+
+      window.dispatchEvent(yenilemeOlayi)
+      const genelYenilemeIslemleri = [
+        ...bekleyenSayfaYenilemeleri,
+        ustalariYukle(),
+        gunSonuDurumunuYukle(),
+        dovizYukle(),
+        havaYukle()
+      ]
+      if (showPhoneAccessModal.value) {
+        genelYenilemeIslemleri.push(telefonErisimiDurumGetir(), mobilOturumlariYukle())
+      }
+      await Promise.allSettled(genelYenilemeIslemleri)
+
       toast.add({
         severity: 'success',
         summary: 'Başarılı',
-        detail: res.message || 'Veriler başarıyla yenilendi.',
+        detail: 'Veritabanı ve açık ekrandaki tüm bilgiler yeniden yüklendi.',
         life: 3000
       })
-      window.dispatchEvent(new CustomEvent('app-data-refreshed'))
     } else {
       toast.add({
         severity: 'error',
@@ -956,7 +978,7 @@ onUnmounted(() => {
         <div class="nav-group">
           <div class="nav-group-label">Finans &amp; Raporlar</div>
           <a
-v-for="item in menuItems.slice(6, 9)"
+v-for="item in menuItems.slice(6, 8)"
             :key="item.label"
             class="nav-item"
             :class="{ active: $route.path === item.path }"
@@ -971,22 +993,22 @@ v-for="item in menuItems.slice(6, 9)"
 <div class="nav-group nav-group-bottom">
   <a
     class="nav-item"
-    :class="{ active: $route.path === menuItems[10].path }"
-    @click.prevent="menuItems[10].command()"
-    href="#"
-  >
-    <i :class="menuItems[10].icon" class="nav-icon"></i>
-    <span>{{ menuItems[10].label }}</span>
-  </a>
-
-  <a
-    class="nav-item"
     :class="{ active: $route.path === menuItems[9].path }"
     @click.prevent="menuItems[9].command()"
     href="#"
   >
     <i :class="menuItems[9].icon" class="nav-icon"></i>
     <span>{{ menuItems[9].label }}</span>
+  </a>
+
+  <a
+    class="nav-item"
+    :class="{ active: $route.path === menuItems[8].path }"
+    @click.prevent="menuItems[8].command()"
+    href="#"
+  >
+    <i :class="menuItems[8].icon" class="nav-icon"></i>
+    <span>{{ menuItems[8].label }}</span>
   </a>
 </div>
       </nav>

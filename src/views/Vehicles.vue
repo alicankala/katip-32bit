@@ -14,6 +14,7 @@ import EmptyState from '../components/EmptyState.vue'
 import HelpButton from '../components/HelpButton.vue'
 import DestekModuUyarisi from '../components/DestekModuUyarisi.vue'
 import { useYetki } from '../composables/useYetki.js'
+import { genelVeriYenilemeIsleyicisi } from '../utils/dataRefresh.js'
 
 const araclar = ref([])
 const yukleniyor = ref(true)
@@ -239,13 +240,15 @@ Object.assign(form, {
   }
 }
 
+const genelYenileme = genelVeriYenilemeIsleyicisi(listeleriGetir)
+
 onMounted(() => {
   listeleriGetir()
-  window.addEventListener('app-data-refreshed', listeleriGetir)
+  window.addEventListener('app-data-refreshed', genelYenileme)
 })
 
 onUnmounted(() => {
-  window.removeEventListener('app-data-refreshed', listeleriGetir)
+  window.removeEventListener('app-data-refreshed', genelYenileme)
 })
 </script>
 

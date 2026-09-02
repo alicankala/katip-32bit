@@ -6,6 +6,7 @@ import Dropdown from 'primevue/dropdown'
 import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
 import HelpButton from '../components/HelpButton.vue'
+import { genelVeriYenilemeIsleyicisi } from '../utils/dataRefresh.js'
 
 const toast = useToast()
 
@@ -585,6 +586,15 @@ const destekBilgileriniYukle = async () => {
   }
 }
 
+const ayarlarVeSistemBilgileriniYenile = async () => {
+  await ayarlarYukle()
+  if (isAdmin.value) {
+    await Promise.all([destekBilgileriniYukle(), yedekleriYukle()])
+  }
+}
+
+const genelYenileme = genelVeriYenilemeIsleyicisi(ayarlarVeSistemBilgileriniYenile)
+
 onMounted(async () => {
   aktifUsta.value = JSON.parse(localStorage.getItem('aktifUsta') || 'null')
   await ayarlarYukle()
@@ -610,6 +620,9 @@ onMounted(async () => {
     await destekBilgileriniYukle()
     await yedekleriYukle()
   }
+
+  window.addEventListener('app-data-refreshed', genelYenileme)
+  onUnmounted(() => window.removeEventListener('app-data-refreshed', genelYenileme))
 })
 </script>
 

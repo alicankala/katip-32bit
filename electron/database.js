@@ -669,6 +669,25 @@ migrationCalistir(32, () => {
   `)
 })
 
+// Cari borçlara isteğe bağlı vade tarihi eklenir. Eski kayıtlar değişmeden kalır.
+migrationCalistir(33, () => {
+  kolonEkleEksikse('account_transactions', 'due_date', 'TEXT')
+})
+
+// Aylık gider serileri aynı gider tablosunda tutulur. İlk kayıt serinin köküdür;
+// sonraki aylar gerektiğinde üretilir ve eski tek seferlik kayıtlar aynen kalır.
+migrationCalistir(34, () => {
+  kolonEkleEksikse('general_expenses', 'recurrence_type', "TEXT DEFAULT 'Tek Seferlik'")
+  kolonEkleEksikse('general_expenses', 'recurrence_end_date', 'TEXT')
+  kolonEkleEksikse('general_expenses', 'recurrence_root_id', 'INTEGER')
+  kolonEkleEksikse('general_expenses', 'recurrence_renewed_by_id', 'INTEGER')
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_general_expenses_recurrence_date
+    ON general_expenses(recurrence_root_id, expense_date)
+    WHERE recurrence_root_id IS NOT NULL;
+  `)
+})
+
   // Index'ler migration'lardan SONRA oluşturulmalı: bazı sütun ve tablolar
   // (ör. customers.is_active, work_order_payments) ancak migration'larla ekleniyor.
   db.exec(`

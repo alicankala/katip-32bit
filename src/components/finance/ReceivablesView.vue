@@ -12,10 +12,6 @@ const props = defineProps({
     type: Array,
     default: () => []
   },
-  manualReceivables: {
-    type: Array,
-    default: () => []
-  },
   // Destek (Admin) oturumunda kayıt oluşturan düğmeler pasiftir; bkz. composables/useYetki.js
   destekModu: {
     type: Boolean,
@@ -25,7 +21,6 @@ const props = defineProps({
 
 const emit = defineEmits(['open-payment'])
 
-const altFiltre = ref('tumu') // 'tumu' | 'is-emri' | 'manuel'
 const aramaMetni = ref('')
 
 const tumAlacaklarListesi = computed(() => {
@@ -50,46 +45,11 @@ const tumAlacaklarListesi = computed(() => {
     })
   })
 
-  // 2. Manuel Cari Alacakları (direction === 'Alacak')
-  props.manualReceivables.forEach(item => {
-    const rem = Number(item.remaining_debt || 0)
-    const tot = Number(item.total_debt || 0)
-    const paid = Number(item.total_paid || 0)
-
-    let durum = 'Ödenmedi'
-    if (paid <= 0) durum = 'Ödenmedi'
-    else if (rem > 0.01) durum = 'Kısmi Ödendi'
-    else durum = 'Ödendi'
-
-    list.push({
-      id: `cari-${item.id}`,
-      kaynak: 'Manuel Cari',
-      work_order_id: null,
-      customer_name: item.name || 'Müşteri',
-      customer_phone: item.phone || '-',
-      plate: '-',
-      detay: item.note || 'Manuel Alacak Kaydı',
-      total_price: tot,
-      toplam_tahsilat: paid,
-      kalan_borc: rem,
-      odeme_durumu: durum,
-      created_at: null,
-      rawItem: item
-    })
-  })
-
   return list
 })
 
 const filtrelenmisAlacaklar = computed(() => {
   let list = tumAlacaklarListesi.value
-
-  // Sekme Filtresi
-  if (altFiltre.value === 'is-emri') {
-    list = list.filter(x => x.kaynak === 'İş Emri')
-  } else if (altFiltre.value === 'manuel') {
-    list = list.filter(x => x.kaynak === 'Manuel Cari')
-  }
 
   // Arama metni
   if (aramaMetni.value.trim()) {
@@ -119,34 +79,10 @@ const getStatusClass = (durum) => {
 <template>
   <div class="receivables-view panel" style="display: flex; flex-direction: column; gap: 16px; background: var(--bg-panel, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 12px; padding: 20px;">
     <!-- Üst Kontrol & Filtre Barları -->
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-      <div style="display: flex; gap: 6px; background: var(--bg-active-box); padding: 4px; border-radius: 8px; border: 1px solid var(--border-color);">
-        <Button 
-          label="Tümü" 
-          size="small" 
-          :severity="altFiltre === 'tumu' ? 'success' : 'secondary'"
-          :text="altFiltre !== 'tumu'"
-          @click="altFiltre = 'tumu'"
-        />
-        <Button 
-          label="İş Emri Alacakları" 
-          size="small" 
-          :severity="altFiltre === 'is-emri' ? 'success' : 'secondary'"
-          :text="altFiltre !== 'is-emri'"
-          @click="altFiltre = 'is-emri'"
-        />
-        <Button 
-          label="Manuel Alacaklar" 
-          size="small" 
-          :severity="altFiltre === 'manuel' ? 'success' : 'secondary'"
-          :text="altFiltre !== 'manuel'"
-          @click="altFiltre = 'manuel'"
-        />
-      </div>
-
+    <div style="display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 12px;">
       <span class="p-input-icon-left" style="min-width: 260px;">
         <i class="pi pi-search" />
-        <InputText v-model="aramaMetni" placeholder="Alacak Ara (Müşteri, plaka, tel...)" style="width: 100%;" />
+        <InputText v-model="aramaMetni" placeholder="Müşteri, plaka veya telefon ara..." style="width: 100%;" />
       </span>
     </div>
 
@@ -160,31 +96,20 @@ const getStatusClass = (durum) => {
     >
       <template #empty>
         <EmptyState
-          v-if="aramaMetni || altFiltre !== 'tumu'"
+          v-if="aramaMetni"
           icon="pi pi-search-minus"
           title="Bu süzgeçte alacak yok"
-          description="Arama kutusunu temizleyin veya üstteki sekmelerden 'Tümü' seçeneğine dönün."
+          description="Arama kutusunu temizleyip yeniden deneyin."
           compact
         />
         <EmptyState
           v-else
           icon="pi pi-check-circle"
           title="Tahsil edilmemiş alacağınız yok"
-          description="İş emri tahsil edilmeden kapatıldığında kalan tutar buraya alacak olarak düşer. Elle alacak kaydı da açabilirsiniz."
+          description="İş emri tahsil edilmeden kapatıldığında kalan tutar buraya otomatik olarak düşer."
           compact
         />
       </template>
-
-      <Column field="kaynak" header="Kaynak" style="width: 110px;">
-        <template #body="slotProps">
-          <span 
-            style="font-size: 11px; padding: 3px 8px; border-radius: 4px; font-weight: 600;"
-            :style="slotProps.data.kaynak === 'İş Emri' ? 'background: rgba(16, 185, 129, 0.15); color: #34d399;' : 'background: rgba(56, 189, 248, 0.15); color: #38bdf8;'"
-          >
-            {{ slotProps.data.kaynak }}
-          </span>
-        </template>
-      </Column>
 
       <Column field="customer_name" header="Müşteri"></Column>
       <Column field="customer_phone" header="Telefon" style="width: 130px;"></Column>
