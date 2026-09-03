@@ -446,7 +446,7 @@ const telefonuAc = async () => {
   border: 1px solid var(--border-color);
 }
 
-.wizard-theme-preview.dark { background: linear-gradient(135deg, #0b0f1c 0%, #111827 60%, #1e2d45 100%); }
+.wizard-theme-preview.dark { background: linear-gradient(135deg, #0e1422 0%, #151d2e 60%, #263650 100%); }
 .wizard-theme-preview.light { background: linear-gradient(135deg, #f2f5f8 0%, #ffffff 60%, #cbd5e1 100%); }
 
 .wizard-table {

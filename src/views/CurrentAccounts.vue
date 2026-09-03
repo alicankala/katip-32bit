@@ -651,6 +651,7 @@ const islemEkleAc = (cari) => {
 const borcEkleDialogAc = () => {
   if (destekModundaEngelle(toast, 'Borç ekleme destek modunda yapılamaz.')) return
 
+  aktifAnaSekme.value = 'borclar'
   seciliCari.value = null
   borcCariSecimi.value = null
   borcCariOnerileri.value = borcCarileri.value.slice(0, 10)
@@ -816,6 +817,7 @@ watch(() => giderForm.value.status, (yeniDurum) => {
 const giderEkleDialogAc = () => {
   if (destekModundaEngelle(toast, 'Gider ekleme destek modunda yapılamaz.')) return
 
+  aktifAnaSekme.value = 'giderler'
   isEditingGider.value = false
   resetGiderForm()
   giderFormDialog.value = true

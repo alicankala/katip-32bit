@@ -1,15 +1,15 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --bg-primary: #090d16;
-  --bg-sidebar: #0b0f1c;
-  --bg-panel: #111827;
-  --bg-card: #111827;
-  --bg-card-hover: #1a2337;
-  --bg-input: #0f172a;
-  --bg-active-box: #0d121f;
-  --border-color: #1e2d45;
-  --border-color-soft: #1e293b;
+  --bg-primary: #0c111c;
+  --bg-sidebar: #0e1422;
+  --bg-panel: #151d2e;
+  --bg-card: #151d2e;
+  --bg-card-hover: #1e2940;
+  --bg-input: #131c2f;
+  --bg-active-box: #111827;
+  --border-color: #263650;
+  --border-color-soft: #263349;
   --text-primary: #f1f5f9;
   --text-secondary: #8fa5be;
   --text-muted: #536882;
@@ -70,6 +70,21 @@ html[data-theme="light"] {
 
 * {
   box-sizing: border-box;
+}
+
+/* Arayüz öğeleri beklemeden açılsın; tema ve yerleşim davranışı korunur. */
+html {
+  scroll-behavior: auto !important;
+}
+
+*,
+*::before,
+*::after {
+  animation-delay: 0s !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-delay: 0s !important;
+  transition-duration: 0.01ms !important;
 }
 
 body {

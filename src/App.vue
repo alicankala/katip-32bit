@@ -590,11 +590,10 @@ const verileriYenile = async () => {
         ustalariYukle(),
         gunSonuDurumunuYukle(),
         dovizYukle(),
-        havaYukle()
+        havaYukle(),
+        telefonErisimiDurumGetir(),
+        mobilOturumlariYukle()
       ]
-      if (showPhoneAccessModal.value) {
-        genelYenilemeIslemleri.push(telefonErisimiDurumGetir(), mobilOturumlariYukle())
-      }
       await Promise.allSettled(genelYenilemeIslemleri)
 
       toast.add({
@@ -1062,7 +1061,7 @@ v-for="item in menuItems.slice(6, 8)"
       <span class="status-gunsonu-text">{{ gunSonuKapanis ? 'Gün Kapatıldı' : 'Gün Açık' }}</span>
     </div>
 
-    <div v-if="gunSonuOzet" class="status-bar-sep"></div>
+    <div class="status-bar-sep"></div>
 
     <div
       class="status-phone"
@@ -1081,6 +1080,7 @@ v-for="item in menuItems.slice(6, 8)"
           : 'Kapalı' }}
       </span>
     </div>
+
   </div>
 
   <!-- Güncelleme şeridi: yalnızca giriş yapılmışken, sağ altta -->
@@ -2088,10 +2088,11 @@ v-for="item in menuItems.slice(6, 8)"
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  padding: 4px 10px;
+  padding: 5px 11px;
+  border: 1px solid transparent;
   border-radius: 6px;
-  font-size: 11.5px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
   cursor: pointer;
   transition: background 0.12s ease;
 }
@@ -2103,9 +2104,13 @@ v-for="item in menuItems.slice(6, 8)"
 }
 .status-gunsonu.is-open {
   color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.24);
 }
 .status-gunsonu.is-closed {
   color: #34d399;
+  background: rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.24);
 }
 
 .status-phone {
@@ -2113,11 +2118,13 @@ v-for="item in menuItems.slice(6, 8)"
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  padding: 4px 10px;
+  padding: 5px 11px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
   border-radius: 6px;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text-muted);
+  background: rgba(148, 163, 184, 0.07);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
@@ -2130,6 +2137,8 @@ v-for="item in menuItems.slice(6, 8)"
 }
 .status-phone.is-active {
   color: #34d399;
+  background: rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.24);
 }
 .status-phone.is-active:hover {
   color: #34d399;
@@ -2415,7 +2424,7 @@ v-for="item in menuItems.slice(6, 8)"
 /* ── Bilgi Şeridi geçiş animasyonu (durum çubuğunda kullanılır) ── */
 .ticker-slide-enter-active,
 .ticker-slide-leave-active {
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity 0.25s ease, transform 0.25s ease !important;
 }
 
 .ticker-slide-enter-from {

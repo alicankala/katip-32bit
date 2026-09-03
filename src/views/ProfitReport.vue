@@ -338,7 +338,7 @@ onUnmounted(() => {
     <!-- E) Genel Finans Özeti -->
     <h3 class="finance-section-title">E) Genel Finans Özeti</h3>
     <div class="finance-grid" style="grid-template-columns: 1fr; margin-bottom: 25px;">
-      <div class="summary-card" style="border-left: 4px solid #38bdf8; padding: 20px; background: #1e293b; border-radius: 12px;">
+      <div class="summary-card" style="border-left: 4px solid #38bdf8; padding: 20px; border-radius: 12px;">
         <h4 style="font-size: 15px; font-weight: 700; color: #38bdf8; margin: 0 0 14px 0; border: none; padding: 0;">
           İşletme Finansal Durum Değerlendirmesi
         </h4>
@@ -496,20 +496,20 @@ onUnmounted(() => {
 
 .page-header h2 {
   margin: 0;
-  color: #ffffff;
+  color: var(--text-title);
 }
 
 .page-header p {
   margin: 6px 0 0;
-  color: #94a3b8;
+  color: var(--text-secondary);
 }
 
 .filter-panel {
   display: flex;
   gap: 16px;
   align-items: center;
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 16px;
   flex-wrap: wrap;
@@ -522,16 +522,16 @@ onUnmounted(() => {
 }
 
 .filter-input-group span {
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
 }
 
 .filter-input-group input {
   width: 170px;
-  background: #0f172a;
-  border-color: #334155;
-  color: #fff;
+  background: var(--bg-input);
+  border-color: var(--border-color);
+  color: var(--text-primary);
 }
 
 .finance-section-title {
@@ -556,8 +556,8 @@ onUnmounted(() => {
 }
 
 .summary-card {
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 14px;
   display: flex;
@@ -566,7 +566,7 @@ onUnmounted(() => {
 }
 
 .summary-card span {
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
