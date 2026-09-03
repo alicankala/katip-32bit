@@ -9,7 +9,7 @@
       // Tema Vue yüklenmeden uygulanır; açık tema kullanan makinelerde ilk karede
       // koyu arka plan/logo gölgesi parlaması oluşmaz.
       try {
-        const tema = localStorage.getItem('uygulamaTema') || 'dark'
+        const tema = localStorage.getItem('uygulamaTema') || 'light'
         document.documentElement.setAttribute('data-theme', tema)
         document.documentElement.style.colorScheme = tema
         if (tema === 'dark') document.documentElement.classList.add('p-dark')

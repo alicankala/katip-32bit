@@ -100,6 +100,7 @@ if (app.isPackaged) {
 let gunSonuHatirlatmasiAtlandi = false
 
 function createWindow() {
+  const kayitliTema = ayarlariGetirBackend()?.settings?.theme
   win = new BrowserWindow({
     title: 'Kâtip',
     width: 1440,
@@ -112,7 +113,7 @@ function createWindow() {
     center: true,
     show: false,
     frame: false,
-    backgroundColor: '#0f172a',
+    backgroundColor: kayitliTema === 'dark' ? '#0f172a' : '#e6ecf2',
     icon: path.join(process.env.VITE_PUBLIC, 'icon.ico'),
     autoHideMenuBar: true,
     webPreferences: {
@@ -483,7 +484,7 @@ function ipcKopruleriniKur() {
     setImmediate(() => {
       try {
         isQuitting = true
-        autoUpdater.quitAndInstall()
+        autoUpdater.quitAndInstall(true, true)
       } catch (error) {
         isQuitting = false
         guncellemeKuruluyor = false
@@ -574,9 +575,12 @@ app.whenReady().then(async () => {
   if (app.isPackaged) {
     // checkForUpdatesAndNotify yerine sade denetim: bildirimi Windows'un
     // İngilizce sistem bildirimi değil, uygulama içindeki şerit üstleniyor.
-    // İnternet yokken buradaki hata sessizce loglanır; arayüz Türkçe durum metnini gösterir.
-    autoUpdater.checkForUpdates().catch((err) => {
-      console.error('Otomatik güncelleme kontrolü hatası:', err)
-    })
+    // Eski/x86 bilgisayarda ağ ve TLS hazırlığı ilk pencereyle yarışmasın diye
+    // denetim kısa süre ertelenir. İnternet yokken hata sessizce loglanır.
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch((err) => {
+        console.error('Otomatik güncelleme kontrolü hatası:', err)
+      })
+    }, 15_000)
   }
 })

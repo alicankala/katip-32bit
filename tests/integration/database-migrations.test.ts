@@ -22,6 +22,7 @@ const EXPECTED_TABLES = [
   'general_expenses',
   'masters',
   'parts',
+  'phone_migrations',
   'schema_version',
   'security_config',
   'stock_movements',
@@ -222,6 +223,11 @@ describe('veritabani ve migration entegrasyonu', () => {
   it('initDB ikinci kez calistiginda semayi ve veriyi degistirmez', () => {
     expect(freshReport.schemaStable).toBe(true)
     expect(freshReport.dataStable).toBe(true)
+  })
+
+  it('telefon veri normalizasyonunu yalniz bir kez isaretler', () => {
+    expect(freshReport.phoneMigrationMarkerCount).toBe(1)
+    expect(legacyReport.phoneMigrationMarkerCount).toBe(1)
   })
 
   it('v8 fixture veritabanini guncel surume migrate eder', () => {

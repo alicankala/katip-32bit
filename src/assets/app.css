@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
-
 :root {
   --bg-primary: #0c111c;
   --bg-sidebar: #0e1422;
@@ -80,11 +78,8 @@ html {
 *,
 *::before,
 *::after {
-  animation-delay: 0s !important;
-  animation-duration: 0.01ms !important;
-  animation-iteration-count: 1 !important;
-  transition-delay: 0s !important;
-  transition-duration: 0.01ms !important;
+  animation: none !important;
+  transition: none !important;
 }
 
 body {
@@ -413,7 +408,7 @@ textarea {
   padding: 10px 14px !important;
   font-family: var(--font-sans) !important;
   font-size: 15px !important;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
   box-shadow: none !important;
 }
 
@@ -439,7 +434,7 @@ textarea:focus {
   color: var(--text-primary) !important;
   border: 1px solid var(--border-color) !important;
   border-radius: 8px !important;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .p-dropdown:hover,
@@ -576,7 +571,7 @@ html[data-theme="light"] .p-datatable-tbody > tr:nth-child(even) {
 
 .p-button {
   font-size: 14px !important;
-  transition: transform 0.1s ease, background 0.15s ease, box-shadow 0.15s ease !important;
+  transition: transform 0.1s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
 .p-button:active:not(:disabled) {
   transform: scale(0.97);
@@ -760,39 +755,6 @@ html[data-theme="light"] div[style*="background: #0f172a"] {
 
 html[data-theme="light"] div[style*="background: #0f172a"] span[style*="color: #fff"] {
   color: var(--text-primary) !important;
-}
-
-/* ── Sekme geçiş efekti (Cari Hesap vb.) ────────── */
-.tab-fade-enter-active,
-.tab-fade-leave-active {
-  transition: opacity 0.15s ease, transform 0.15s ease;
-}
-.tab-fade-enter-from {
-  opacity: 0;
-  transform: translateY(4px);
-}
-.tab-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-4px);
-}
-
-/* ── Tema geçiş animasyonu ────────────────────────── */
-html,
-body,
-.app-sidebar,
-.app-content,
-.p-button,
-.p-tag,
-.p-dialog,
-.dash-stat-card,
-.info-panel,
-.search-module,
-.low-stock-box,
-.stock-empty-box,
-[class*="-panel"],
-[class*="-box"],
-[class*="-card"] {
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
 }
 
 /* ── Durum rozetleri (Tag) kontrast güçlendirme ──── */

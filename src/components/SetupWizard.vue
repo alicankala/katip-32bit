@@ -11,7 +11,7 @@ import { useToast } from 'primevue/usetoast'
 const props = defineProps({
   visible: { type: Boolean, default: false },
   isAdmin: { type: Boolean, default: false },
-  mevcutTema: { type: String, default: 'dark' }
+  mevcutTema: { type: String, default: 'light' }
 })
 
 const emit = defineEmits(['update:visible', 'tamamlandi', 'telefon-ac'])

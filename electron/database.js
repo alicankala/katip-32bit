@@ -707,7 +707,7 @@ migrationCalistir(34, () => {
 }
 
 export const DEFAULT_SETTINGS = {
-  theme: 'dark',
+  theme: 'light',
   list_density: 'normal',
   work_orders_default_filter: 'Açık',
   show_critical_stock_warnings: 'true',

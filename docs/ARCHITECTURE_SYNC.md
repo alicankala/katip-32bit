@@ -33,7 +33,8 @@ Aşağıdaki alanlar otomatik eşitlik kontrolüne alınmaz:
 | Electron | Modern hat | Tam sabit 22.3.27 |
 | `better-sqlite3` | Modern x64 sürümü | Tam sabit 9.6.0 / ia32 ABI |
 | Preload çıktısı | `preload.mjs` | `preload.js` |
-| Updater ağı | electron-updater varsayılan transport | `nodeHttpExecutor.ts` ve Node CA |
+| Updater ağı | electron-updater varsayılan transport | `nodeHttpExecutor.ts`, Node CA ve ilk pencereyle yarışmaması için 15 saniye gecikmeli başlangıç denetimi |
+| Arayüz yazı tipi | Inter ağ kaynağı, sistem fontu fallback | Açılışta ağ beklememek için doğrudan Segoe UI/sistem fontu |
 | Yedekleme | Windows `tar.exe` | `yazl`/`yauzl` streaming ZIP |
 | Paketleme | NSIS x64 | NSIS ia32 ve `-x86` artefakt adı |
 | Telefon server kapanışı | `closeAllConnections` kullanılabilir | Socketler elle izlenir/kapatılır |

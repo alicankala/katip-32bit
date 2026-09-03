@@ -415,6 +415,9 @@ const carileriYukle = async () => {
     const res = await window.api.cariHesapleriGetir()
     if (res?.success) {
       cariler.value = res.accounts || []
+      if (islemDialogAcik.value) {
+        borcCariOnerileri.value = borcCarileri.value.slice(0, 10)
+      }
       if (seciliCari.value) {
         const guncel = cariler.value.find(c => c.id === seciliCari.value.id)
         if (guncel) seciliCari.value = guncel
@@ -443,21 +446,29 @@ const cariDetaylariniYukle = async (cari) => {
 }
 
 const iliskiliVerileriYukle = async () => {
-  try {
-    if (window.api?.araclariGetir) {
-      const araclar = await window.api.araclariGetir()
-      araclarListesi.value = Array.isArray(araclar) ? araclar : []
+  const araclariYukle = async () => {
+    try {
+      if (window.api?.araclariGetir) {
+        const araclar = await window.api.araclariGetir()
+        araclarListesi.value = Array.isArray(araclar) ? araclar : []
+      }
+    } catch (err) {
+      console.error('Araçlar yüklenemedi:', err)
     }
-  } catch (err) {}
+  }
 
-  try {
-    if (window.api?.isEmirleriGetir) {
-      const isEmirleri = await window.api.isEmirleriGetir()
-      isEmirleriListesi.value = Array.isArray(isEmirleri) ? isEmirleri : []
+  const isEmirleriniYukle = async () => {
+    try {
+      if (window.api?.isEmirleriGetir) {
+        const isEmirleri = await window.api.isEmirleriGetir()
+        isEmirleriListesi.value = Array.isArray(isEmirleri) ? isEmirleri : []
+      }
+    } catch (err) {
+      console.error('İş emirleri yüklenemedi:', err)
     }
-  } catch (err) {}
+  }
 
-  await musteriAlacaklariniYukle()
+  await Promise.all([araclariYukle(), isEmirleriniYukle(), musteriAlacaklariniYukle()])
 }
 
 const musteriAlacaklariniYukle = async () => {
@@ -1413,15 +1424,18 @@ const genelYenileme = genelVeriYenilemeIsleyicisi(verileriYenileDetayli)
 
 onMounted(async () => {
   sayfaYukleniyor.value = true
-  await carileriYukle()
-  await iliskiliVerileriYukle()
-  await giderleriYukle()
-  await karlilikOzetiniYukle()
-  sayfaYukleniyor.value = false
 
   if (route.query.action === 'new-debt') {
     borcEkleDialogAc()
   }
+
+  await Promise.all([
+    carileriYukle(),
+    iliskiliVerileriYukle(),
+    giderleriYukle(),
+    karlilikOzetiniYukle()
+  ])
+  sayfaYukleniyor.value = false
 
   window.addEventListener('app-data-refreshed', genelYenileme)
 })
@@ -1516,7 +1530,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <Transition v-else name="tab-fade" mode="out-in">
+    <template v-else>
       <!-- TAB 1: Genel Özet -->
       <div v-if="aktifAnaSekme === 'genel-ozet'" key="genel-ozet">
         <PaymentOverview
@@ -1573,7 +1587,7 @@ onUnmounted(() => {
       <div v-else-if="aktifAnaSekme === 'tum-hareketler'" key="tum-hareketler">
         <MovementsView :movements="tumHareketlerListesi" />
       </div>
-    </Transition>
+    </template>
 
     <!-- MODAL 1: Müşteri İş Emri Ödemesi Al -->
     <Dialog 

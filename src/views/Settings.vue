@@ -100,7 +100,7 @@ const guncellemeyiKur = async () => {
 const orijinalAyarlar = ref({})
 
 const ayarlarForm = reactive({
-  theme: 'dark',
+  theme: 'light',
   list_density: 'normal',
   work_orders_default_filter: 'Açık',
   show_critical_stock_warnings: true,
@@ -199,7 +199,7 @@ const ayarlarYukle = async () => {
     if (res?.success && res.settings) {
       const s = res.settings
       orijinalAyarlar.value = { ...s }
-      ayarlarForm.theme = s.theme || 'dark'
+      ayarlarForm.theme = s.theme || 'light'
       ayarlarForm.list_density = s.list_density || 'normal'
       ayarlarForm.work_orders_default_filter = s.work_orders_default_filter || 'Açık'
       ayarlarForm.show_critical_stock_warnings = s.show_critical_stock_warnings !== 'false'

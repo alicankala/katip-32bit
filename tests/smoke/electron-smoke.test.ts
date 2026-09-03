@@ -145,6 +145,7 @@ describe('Electron kritik akış smoke testi', () => {
     expect(report.runtime.electron).toBe(String(packageJson.devDependencies.electron).match(/\d+\.\d+\.\d+/)?.[0])
     expect(report.runtime.preloadFile).toBe(esmRuntime ? 'preload.mjs' : 'preload.js')
     expect(report.loginScreen).toBe(true)
+    expect(report.initialTheme).toBe('light')
   })
 
   it('yerel yazdırma penceresini güvenli tercihlerle açıp uzak pencereyi reddeder', () => {

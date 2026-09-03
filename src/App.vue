@@ -27,9 +27,9 @@ const toggleAdminLogin = () => {
   pin.value = ''
   girisHatasi.value = ''
 }
-const mevcutTema = ref(localStorage.getItem('uygulamaTema') || 'dark')
+const mevcutTema = ref(localStorage.getItem('uygulamaTema') || 'light')
 const temaUygula = () => {
-  const kayitliTema = localStorage.getItem('uygulamaTema') || 'dark'
+  const kayitliTema = localStorage.getItem('uygulamaTema') || 'light'
   mevcutTema.value = kayitliTema
   document.documentElement.setAttribute('data-theme', kayitliTema)
   document.documentElement.style.colorScheme = kayitliTema
@@ -671,7 +671,7 @@ onMounted(async () => {
       const sRes = await window.api.ayarlariGetir()
       if (sRes?.success && sRes.settings) {
         const set = sRes.settings
-        const savedTheme = set.theme || localStorage.getItem('uygulamaTema') || 'dark'
+        const savedTheme = set.theme || localStorage.getItem('uygulamaTema') || 'light'
         mevcutTema.value = savedTheme
         document.documentElement.setAttribute('data-theme', savedTheme)
         document.documentElement.style.colorScheme = savedTheme

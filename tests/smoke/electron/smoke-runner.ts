@@ -243,6 +243,11 @@ async function calistir(): Promise<void> {
     'giriş ekranı'
   )
   console.log('[SMOKE] login-screen')
+  const initialTheme = await javascriptCalistir(
+    win,
+    `document.documentElement.getAttribute('data-theme') || ''`,
+    'varsayilan tema'
+  )
   const preloadState = JSON.parse(await javascriptCalistir(win, `JSON.stringify({
     hasApi: Boolean(window.api),
     hasLogin: typeof window.api?.ustaGirisYap === 'function',
@@ -343,6 +348,7 @@ async function calistir(): Promise<void> {
       remoteWindowDenied
     },
     loginScreen,
+    initialTheme,
     preloadState,
     mastersResult,
     loggedIn,

@@ -118,6 +118,12 @@ async function calistir(): Promise<void> {
     }
 
     databaseModule.initDB()
+    const phoneMigrationsModule = await import('../../../electron/phoneMigrations.js')
+    phoneMigrationsModule.runPhoneServerMigrations()
+    phoneMigrationsModule.runPhoneServerMigrations()
+    const phoneMigrationMarkerCount = Number(db.prepare(
+      "SELECT COUNT(*) AS count FROM phone_migrations WHERE name = 'phone_data_normalization_v1'"
+    ).get().count)
 
     const common = {
       scenarioRoot,
@@ -128,7 +134,8 @@ async function calistir(): Promise<void> {
       indexes: indeksAdlari(db),
       quickCheck: quickCheck(db),
       foreignKeys: Number(db.pragma('foreign_keys', { simple: true })),
-      mmapSize: Number(db.pragma('mmap_size', { simple: true }))
+      mmapSize: Number(db.pragma('mmap_size', { simple: true })),
+      phoneMigrationMarkerCount
     }
 
     if (scenario === 'fresh') {
