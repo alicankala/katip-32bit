@@ -44,10 +44,11 @@
   "artifactName": "Katip-Windows-x86-${version}-Setup.${ext}"
 },
   "nsis": {
-    // Assisted NSIS modu hem HKCU hem HKLM kurulumlarını algılar. Güncelleme
-    // quitAndInstall(true, true) ile yine sessiz çalışır; yalnız manuel ilk kurulumda
-    // kapsam seçimi gösterilir. Böylece sürümler farklı klasörlerde çoğalmaz.
+    // Assisted NSIS modu hem HKCU hem HKLM kurulumlarını algılar. Güncellemede
+    // yalnız kurulum ilerlemesi gösterilir; seçim/Next/Finish beklenmez. Manuel ilk
+    // kurulumda kapsam seçimi korunur. Böylece sürümler farklı klasörlerde çoğalmaz.
     "oneClick": false,
+    "include": "installer/installer.nsh",
     "perMachine": false,
     // Eski makine-geneli ve yeni kullanıcı kurulumu birlikte bulunursa HKLM seçilir;
     // electron-builder aynı geçişte HKCU kopyasını da kaldırıp tek kuruluma düşürür.

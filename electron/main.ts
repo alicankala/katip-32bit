@@ -487,11 +487,13 @@ function ipcKopruleriniKur() {
     // Yedek zaten tamamlandı. before-quit içindeki isteğe bağlı çıkış yedeğini
     // ikinci kez çalıştırmadan kurucuyu başlat; böylece NSIS ile asenkron yedek
     // birbirinin uygulamanın kapanmasını beklediği bir yarış oluşmaz.
-    // Renderer son durumu ekrana çizebilsin; ardından NSIS sessiz çalışır.
+    // Renderer son durumu ekrana çizebilsin; ardından NSIS yalnız gerçek kurulum
+    // ilerlemesini gösterir. Güncelleme sayfaları ve Finish beklemesi installer.nsh
+    // tarafından atlanır, kurulum bitince yeni sürüm kendiliğinden açılır.
     setTimeout(() => {
       try {
         isQuitting = true
-        autoUpdater.quitAndInstall(true, true)
+        autoUpdater.quitAndInstall(false, true)
       } catch (error) {
         isQuitting = false
         guncellemeKuruluyor = false

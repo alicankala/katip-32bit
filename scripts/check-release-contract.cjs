@@ -11,6 +11,7 @@ const main = read('electron/main.ts')
 const appView = read('src/App.vue')
 const database = read('electron/database.js')
 const settings = read('electron/controllers/settingsController.ts')
+const installer = read('installer/installer.nsh')
 const x86 = pkg.type !== 'module'
 const expectedRepo = x86 ? 'katip-32bit' : 'katip-64bit'
 const expectedArch = x86 ? 'ia32' : 'x64'
@@ -32,7 +33,9 @@ const checks = [
   ['Release installer boyutunu ve SHA-512 özetini doğruluyor', releaseScript.includes('$manifestBoyut') && releaseScript.includes('$gercekSha')],
   ['İmzasız müşteri yayını açık izin gerektiriyor', releaseScript.includes('$ImzasizYayinaIzinVer') && releaseScript.includes("Get-AuthenticodeSignature")],
   ['Updater hata ve indirme olaylarını logluyor', main.includes("autoUpdater.on('error'") && main.includes("autoUpdater.on('update-downloaded'")],
-  ['Updater kurulumu sessiz başlatıyor', main.includes('autoUpdater.quitAndInstall(true, true)')],
+  ['Updater gerçek NSIS ilerlemesini gösteriyor', main.includes('autoUpdater.quitAndInstall(false, true)')],
+  ['Özel güncelleme kurucusu pakete dahil', builder.includes('"include": "installer/installer.nsh"')],
+  ['Güncelleme kurucusu Finish beklemeden uygulamayı açıyor', installer.includes('${isUpdated}') && installer.includes('Abort') && installer.includes('Call KatipStartAppFromFinish')],
   ['Güncelleme ilerleme çubuğu görünür', appView.includes('update-progress-track') && appView.includes('guncellemeYuzdesi')],
   ['Güncelleme şeridi girişe bağlı değil', !appView.includes('aktifUsta && guncellemeSeridiGorunur')],
   ['Yedek ve kurulum aşaması arayüze aktarılıyor', main.includes("asama: 'yedekleniyor'") && main.includes("asama: 'kurulum-basliyor'")],
