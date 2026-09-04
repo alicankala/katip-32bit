@@ -69,6 +69,7 @@ interface Window {
 
     // Ana Panel / Geçmiş
     istatistikleriGetir: () => Promise<any>
+    anaPanelBorclariGetir: (limit?: number) => Promise<any>
     musteriGecmisiGetir: (id: number) => Promise<any>
 
 // Veritabanı

@@ -258,6 +258,18 @@ describe('para, stok ve iş emri controller iş kuralları', () => {
     expect(summary.yontemCikis).toEqual({ nakit: 15, kart: 20, havale: 0, diger: 0 })
   })
 
+  it('ana panel borç özetini tüm açık carilerden hesaplayıp yalnız en yüksek üçünü döndürür', () => {
+    expect(report.dashboardDebts.accountResults.every((item: any) => item.account.success && item.transaction.success)).toBe(true)
+    expect(report.dashboardDebts.paymentResult.success).toBe(true)
+    expect(report.dashboardDebts.result).toMatchObject({
+      success: true,
+      totalDebt: 990,
+      openAccountCount: 4
+    })
+    expect(report.dashboardDebts.result.debts).toHaveLength(3)
+    expect(report.dashboardDebts.result.debts.map((item: any) => item.remaining_debt)).toEqual([400, 300, 200])
+  })
+
   it('kapalı güne ödeme, ödeme iptali, cari ödeme ve gider ekletmez', () => {
     expect(report.closedDay.closeResult.success).toBe(true)
     expect(Object.values(report.closedDay.results).every((result: any) => result.success === false)).toBe(true)

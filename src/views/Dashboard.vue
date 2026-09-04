@@ -31,6 +31,11 @@ bitenStok: 0
 const sonAcikIsEmirleri = ref([])
 const tumAcikIsEmirleri = ref([])
 const dusukStokParcalari = ref([])
+const borcOzeti = ref({
+  toplamBorc: 0,
+  acikCariSayisi: 0,
+  borclar: []
+})
 const yukleniyor = ref(true)
 const uzunSureAcikAyarlari = ref({ enabled: true, gun: 3 })
 
@@ -57,12 +62,23 @@ const gecmisYukleniyor = ref(false)
 const verileriYukle = async () => {
   yukleniyor.value = true
   try {
-    const istatistikRes = await window.api.istatistikleriGetir()
+    const [istatistikRes, borcRes] = await Promise.all([
+      window.api.istatistikleriGetir(),
+      window.api.anaPanelBorclariGetir?.(3)
+    ])
 
     if (istatistikRes?.success) {
       istatistikler.value = {
         ...istatistikler.value,
         ...istatistikRes.veriler
+      }
+    }
+
+    if (borcRes?.success) {
+      borcOzeti.value = {
+        toplamBorc: Number(borcRes.totalDebt || 0),
+        acikCariSayisi: Number(borcRes.openAccountCount || 0),
+        borclar: Array.isArray(borcRes.debts) ? borcRes.debts : []
       }
     }
 
@@ -353,6 +369,10 @@ const servisKabuleGit = () => {
 
 const yeniBorcEklemeyeGit = () => {
   router.push({ path: '/current-accounts', query: { tab: 'borclar', action: 'new-debt' } })
+}
+
+const borclaraGit = () => {
+  router.push({ path: '/current-accounts', query: { tab: 'borclar' } })
 }
 
 const isEmirlerineGit = () => {
@@ -660,6 +680,47 @@ onUnmounted(() => {
 
           <div v-else class="search-hint">
             Plaka, müşteri adı, telefon veya yapılan işlem ile geçmiş servisleri bulun.
+          </div>
+        </div>
+
+        <!-- Açık Borçlar: x86 için yalnızca özet ve en yüksek 3 cari yüklenir. -->
+        <div
+          class="dashboard-debt-panel"
+          role="button"
+          tabindex="0"
+          title="Finans borçlarına git"
+          @click="borclaraGit"
+          @keyup.enter="borclaraGit"
+        >
+          <div class="dashboard-debt-header">
+            <div>
+              <div class="dashboard-debt-title"><i class="pi pi-wallet"></i> Açık Borçlar</div>
+              <div class="dashboard-debt-summary">
+                {{ tlFormatla(borcOzeti.toplamBorc) }} · {{ borcOzeti.acikCariSayisi }} açık cari
+              </div>
+            </div>
+            <span class="dashboard-debt-link">Tümünü Gör <i class="pi pi-arrow-right"></i></span>
+          </div>
+
+          <div v-if="yukleniyor" class="dashboard-debt-list skeleton-list">
+            <div class="skeleton-row" v-for="n in 3" :key="n">
+              <span class="skeleton-block" style="flex:1"></span>
+              <span class="skeleton-block" style="width:80px"></span>
+            </div>
+          </div>
+
+          <div v-else-if="borcOzeti.borclar.length" class="dashboard-debt-list">
+            <div v-for="borc in borcOzeti.borclar" :key="borc.id" class="dashboard-debt-row">
+              <span class="dashboard-debt-name">
+                <strong>{{ borc.name || 'İsimsiz Cari' }}</strong>
+                <small>{{ borc.type || 'Tedarikçi / Taşeron' }}</small>
+              </span>
+              <strong class="dashboard-debt-amount">{{ tlFormatla(borc.remaining_debt) }}</strong>
+            </div>
+          </div>
+
+          <div v-else class="dashboard-debt-empty">
+            <i class="pi pi-check-circle"></i> Açık tedarikçi borcu bulunmuyor.
           </div>
         </div>
 
@@ -1074,6 +1135,116 @@ onUnmounted(() => {
 
 .search-module-input {
   flex: 1;
+}
+
+.dashboard-debt-panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid #ef4444;
+  border-radius: 10px;
+  padding: 16px;
+  cursor: pointer;
+}
+
+.dashboard-debt-panel:focus-visible {
+  outline: 2px solid #ef4444;
+  outline-offset: 2px;
+}
+
+.dashboard-debt-header,
+.dashboard-debt-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-debt-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-title);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.dashboard-debt-title i,
+.dashboard-debt-amount {
+  color: #f87171;
+}
+
+.dashboard-debt-summary {
+  margin-top: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.dashboard-debt-link {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.dashboard-debt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+.dashboard-debt-row {
+  min-height: 48px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.dashboard-debt-row:last-child {
+  border-bottom: 0;
+}
+
+.dashboard-debt-name {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dashboard-debt-name strong,
+.dashboard-debt-name small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-debt-name strong {
+  color: var(--text-title);
+  font-size: 13px;
+}
+
+.dashboard-debt-name small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.dashboard-debt-amount {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.dashboard-debt-empty {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.dashboard-debt-empty i {
+  color: #10b981;
 }
 
 .search-status {

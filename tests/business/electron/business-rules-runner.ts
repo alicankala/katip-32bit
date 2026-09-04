@@ -456,6 +456,36 @@ async function calistir(): Promise<void> {
       `).all(summaryDate)
     }
 
+    // Ana panel yalnızca en yüksek üç borcu döndürür; toplam ise tüm açık borçları kapsar.
+    const dashboardDebtAmounts = [100, 400, 300, 200]
+    const dashboardDebtAccounts = dashboardDebtAmounts.map((amount, index) => {
+      const account = cagir('cari-hesap-ekle', {
+        name: `Panel Borç ${index + 1}`,
+        type: 'Tedarikçi',
+        direction: 'Borç'
+      })
+      const transaction = cagir('cari-islem-ekle', {
+        current_account_id: account.id,
+        date: '2024-02-01',
+        transaction_type: 'Borç',
+        description: 'Ana panel borç testi',
+        amount
+      })
+      return { account, transaction }
+    })
+    const dashboardDebtPayment = cagir('cari-odeme-ekle', {
+      current_account_id: dashboardDebtAccounts[0].account.id,
+      date: '2024-02-02',
+      amount: 10,
+      payment_method: 'Nakit',
+      description: 'Ana panel borç testi ödemesi'
+    })
+    report.dashboardDebts = {
+      result: cagir('ana-panel-borclari-getir', 3),
+      accountResults: dashboardDebtAccounts,
+      paymentResult: dashboardDebtPayment
+    }
+
     // Kapalı güne ekleme ve iptal girişimleri hiçbir kayıt değiştirmemeli.
     const closedDate = '2024-01-16'
     const closedWo = isEmriOlustur(100)

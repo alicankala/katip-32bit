@@ -125,6 +125,64 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
     }
   })
 
+  // Ana panel için yalnızca özet ve en yüksek üç açık borç döndürülür.
+  // Tüm cari listesini renderer'a taşımamak x86 cihazlarda RAM ve render yükünü düşük tutar.
+  kanalEkle('ana-panel-borclari-getir', (_event, limitDegeri: any = 3) => {
+    try {
+      const limit = Math.min(Math.max(Number.parseInt(String(limitDegeri), 10) || 3, 1), 5)
+      const satirlar = db.prepare(`
+        WITH islem_toplamlari AS (
+          SELECT current_account_id, SUM(amount) AS total_debt
+          FROM account_transactions
+          GROUP BY current_account_id
+        ),
+        odeme_toplamlari AS (
+          SELECT current_account_id, SUM(amount) AS total_paid
+          FROM account_payments
+          GROUP BY current_account_id
+        ),
+        acik_borclar AS (
+          SELECT
+            ca.id,
+            ca.name,
+            ca.type,
+            COALESCE(it.total_debt, 0) - COALESCE(ot.total_paid, 0) AS remaining_debt
+          FROM current_accounts ca
+          LEFT JOIN islem_toplamlari it ON it.current_account_id = ca.id
+          LEFT JOIN odeme_toplamlari ot ON ot.current_account_id = ca.id
+          WHERE IFNULL(ca.is_active, 1) = 1
+            AND IFNULL(ca.direction, 'Borç') = 'Borç'
+            AND COALESCE(it.total_debt, 0) - COALESCE(ot.total_paid, 0) > 0.01
+        )
+        SELECT
+          id,
+          name,
+          type,
+          remaining_debt,
+          COUNT(*) OVER () AS open_account_count,
+          SUM(remaining_debt) OVER () AS total_debt
+        FROM acik_borclar
+        ORDER BY remaining_debt DESC, name COLLATE NOCASE ASC
+        LIMIT ?
+      `).all(limit) as any[]
+
+      return {
+        success: true,
+        totalDebt: Number(satirlar[0]?.total_debt || 0),
+        openAccountCount: Number(satirlar[0]?.open_account_count || 0),
+        debts: satirlar.map(({ id, name, type, remaining_debt }) => ({
+          id,
+          name,
+          type,
+          remaining_debt: Number(remaining_debt || 0)
+        }))
+      }
+    } catch (error) {
+      console.error('Ana panel borç özeti hatası:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
   // 2. Cari Hesap - Ekle
   kanalEkle('cari-hesap-ekle', (_event, hesap: any) => {
     try {
