@@ -94,12 +94,15 @@ const gunSonunaGit = () => {
 // güncelleme hazır olduğunda uygulamanın içinde şerit gösteriliyor.
 const guncelleme = ref({ durum: 'bilinmiyor', surum: '', yuzde: 0 })
 const guncellemeKuruluyor = ref(false)
-const guncellemeSeridiKapatildi = ref(false)
 
 const guncellemeSeridiGorunur = computed(() =>
-  !guncellemeSeridiKapatildi.value &&
-  (guncelleme.value.durum === 'hazir' || guncelleme.value.durum === 'indiriliyor')
+  ['indiriliyor', 'hazir', 'kuruluyor'].includes(guncelleme.value.durum)
 )
+
+const guncellemeYuzdesi = computed(() => {
+  if (guncelleme.value.durum !== 'indiriliyor') return 100
+  return Math.min(100, Math.max(0, Number(guncelleme.value.yuzde) || 0))
+})
 
 const guncellemeyiKur = async () => {
   if (guncellemeKuruluyor.value) return
@@ -639,8 +642,6 @@ onMounted(async () => {
   if (window.api?.onGuncellemeDurumu) {
     const unbindGuncelleme = window.api.onGuncellemeDurumu((durum) => {
       guncelleme.value = durum || { durum: 'bilinmiyor' }
-      // Yeni bir güncelleme geldiğinde daha önce kapatılmış şerit tekrar açılır.
-      if (durum?.durum === 'hazir') guncellemeSeridiKapatildi.value = false
     })
     onUnmounted(unbindGuncelleme)
   }
@@ -1083,19 +1084,29 @@ v-for="item in menuItems.slice(6, 8)"
 
   </div>
 
-  <!-- Güncelleme şeridi: yalnızca giriş yapılmışken, sağ altta -->
-  <div v-if="aktifUsta && guncellemeSeridiGorunur" class="update-bar">
-    <i :class="guncelleme.durum === 'hazir' ? 'pi pi-download' : 'pi pi-cloud-download'" class="update-bar-icon"></i>
+  <!-- Güncelleme şeridi giriş ekranında da görünür; kurulum sessiz ilerler. -->
+  <div v-if="guncellemeSeridiGorunur" class="update-bar">
+    <i :class="guncelleme.durum === 'kuruluyor' ? 'pi pi-cog' : guncelleme.durum === 'hazir' ? 'pi pi-download' : 'pi pi-cloud-download'" class="update-bar-icon"></i>
 
-    <div class="update-bar-texts">
-      <template v-if="guncelleme.durum === 'hazir'">
-        <strong>Yeni sürüm hazır{{ guncelleme.surum ? ` (${guncelleme.surum})` : '' }}</strong>
-        <span>Kurulumdan önce müşteri kayıtları ve fotoğraflar güvenli biçimde yedeklenecek.</span>
-      </template>
-      <template v-else>
-        <strong>Yeni sürüm indiriliyor{{ guncelleme.surum ? ` (${guncelleme.surum})` : '' }}</strong>
-        <span>%{{ guncelleme.yuzde || 0 }} tamamlandı. Çalışmaya devam edebilirsiniz.</span>
-      </template>
+    <div class="update-bar-body">
+      <div class="update-bar-texts">
+        <template v-if="guncelleme.durum === 'kuruluyor'">
+          <strong>Güncelleme kuruluyor{{ guncelleme.surum ? ` (${guncelleme.surum})` : '' }}</strong>
+          <span>{{ guncelleme.asama === 'kurulum-basliyor' ? 'Program kapanacak ve kurulum otomatik tamamlanacak.' : 'Müşteri kayıtları ve fotoğraflar güvenle yedekleniyor.' }}</span>
+        </template>
+        <template v-else-if="guncelleme.durum === 'hazir'">
+          <strong>Yeni sürüm hazır{{ guncelleme.surum ? ` (${guncelleme.surum})` : '' }}</strong>
+          <span>Kurulumdan önce müşteri kayıtları ve fotoğraflar güvenli biçimde yedeklenecek.</span>
+        </template>
+        <template v-else>
+          <strong>Yeni sürüm indiriliyor{{ guncelleme.surum ? ` (${guncelleme.surum})` : '' }}</strong>
+          <span>%{{ guncellemeYuzdesi }} tamamlandı. Çalışmaya devam edebilirsiniz.</span>
+        </template>
+      </div>
+
+      <div class="update-progress-track" role="progressbar" aria-label="Güncelleme ilerlemesi" aria-valuemin="0" aria-valuemax="100" :aria-valuenow="guncellemeYuzdesi">
+        <div class="update-progress-fill" :style="{ width: `${guncellemeYuzdesi}%` }"></div>
+      </div>
     </div>
 
     <Button
@@ -1107,9 +1118,6 @@ v-for="item in menuItems.slice(6, 8)"
       @click="guncellemeyiKur"
     />
 
-    <button class="update-bar-close" title="Kapat" @click="guncellemeSeridiKapatildi = true">
-      <i class="pi pi-times"></i>
-    </button>
   </div>
 
   <!-- Kurulum Sihirbazı (ilk giriş) -->
@@ -2351,6 +2359,30 @@ v-for="item in menuItems.slice(6, 8)"
   min-width: 0;
 }
 
+.update-bar-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 210px;
+}
+
+.update-progress-track {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-active-box);
+}
+
+.update-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent-color), #22c55e);
+  transition: width 0.2s ease;
+}
+
 .update-bar-texts strong {
   color: var(--text-title);
   font-size: 14px;
@@ -2362,28 +2394,6 @@ v-for="item in menuItems.slice(6, 8)"
   font-size: 12.5px;
   line-height: 1.45;
 }
-
-.update-bar-close {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
-  padding: 0;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.update-bar-close:hover {
-  background: var(--bg-card-hover);
-  color: var(--text-primary);
-}
-
-.update-bar-close i { font-size: 12px; }
 
 @keyframes update-bar-in {
   from { opacity: 0; transform: translateY(10px); }

@@ -208,9 +208,10 @@ function createWindow() {
 // olduğu için dükkanda fark edilmiyordu. Durum artık arayüze aktarılıp
 // uygulamanın içinde Türkçe bir şeritle gösteriliyor.
 type GuncellemeDurumu = {
-  durum: 'bilinmiyor' | 'denetleniyor' | 'guncel' | 'indiriliyor' | 'hazir' | 'hata'
+  durum: 'bilinmiyor' | 'denetleniyor' | 'guncel' | 'indiriliyor' | 'hazir' | 'kuruluyor' | 'hata'
   surum?: string
   yuzde?: number
+  asama?: 'yedekleniyor' | 'kurulum-basliyor'
   hata?: string
   internetYok?: boolean
 }
@@ -451,6 +452,8 @@ function ipcKopruleriniKur() {
     }
 
     guncellemeKuruluyor = true
+    const kurulacakSurum = guncellemeDurumu.surum
+    guncellemeDurumunuYayinla({ durum: 'kuruluyor', surum: kurulacakSurum, yuzde: 100, asama: 'yedekleniyor' })
 
     // Müşteri kayıtları yerinde değiştirilmez. Kurulumdan önce SQLite'ın tutarlı
     // anlık görüntüsü ve fotoğraflar ayrı bir ZIP'e kopyalanır. Yedek alınamazsa
@@ -461,6 +464,7 @@ function ipcKopruleriniKur() {
     } catch (error) {
       console.error('[UpdateInstall] Güncelleme öncesi yedek hatası:', error)
       guncellemeKuruluyor = false
+      guncellemeDurumunuYayinla({ durum: 'hazir', surum: kurulacakSurum, yuzde: 100 })
       return {
         success: false,
         error: 'Güncelleme kurulmadı: güvenlik yedeği alınamadı. Diskte boş alan olduğunu kontrol edin.'
@@ -470,6 +474,7 @@ function ipcKopruleriniKur() {
     if (!yedekSonucu.success) {
       console.error('[UpdateInstall] Güncelleme öncesi yedek alınamadı:', yedekSonucu.error)
       guncellemeKuruluyor = false
+      guncellemeDurumunuYayinla({ durum: 'hazir', surum: kurulacakSurum, yuzde: 100 })
       return {
         success: false,
         error: `Güncelleme kurulmadı: güvenlik yedeği alınamadı. (${yedekSonucu.error || 'bilinmeyen hata'})`
@@ -477,11 +482,13 @@ function ipcKopruleriniKur() {
     }
 
     console.log('[UpdateInstall] Güncelleme öncesi tam yedek hazır:', yedekSonucu.path)
+    guncellemeDurumunuYayinla({ durum: 'kuruluyor', surum: kurulacakSurum, yuzde: 100, asama: 'kurulum-basliyor' })
 
     // Yedek zaten tamamlandı. before-quit içindeki isteğe bağlı çıkış yedeğini
     // ikinci kez çalıştırmadan kurucuyu başlat; böylece NSIS ile asenkron yedek
     // birbirinin uygulamanın kapanmasını beklediği bir yarış oluşmaz.
-    setImmediate(() => {
+    // Renderer son durumu ekrana çizebilsin; ardından NSIS sessiz çalışır.
+    setTimeout(() => {
       try {
         isQuitting = true
         autoUpdater.quitAndInstall(true, true)
@@ -494,7 +501,7 @@ function ipcKopruleriniKur() {
           hata: 'Güncelleme kurulumu başlatılamadı. Programı kapatıp yeniden açmayı deneyin.'
         })
       }
-    })
+    }, 1200)
     return { success: true, backupCreated: true }
   })
 
