@@ -51,6 +51,7 @@ export const USTA_ONLY_CHANNELS: ReadonlySet<string> = new Set([
   'cari-hesap-guncelle',
   'cari-hesap-sil',
   'cari-islem-ekle',
+  'cari-islem-guncelle',
   'cari-islem-sil',
   'cari-odeme-ekle',
   'cari-odeme-sil',

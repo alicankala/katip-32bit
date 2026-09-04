@@ -629,6 +629,7 @@ onUnmounted(() => {
             type="password"
             maxlength="4"
             inputmode="numeric"
+            data-enter-handled="true"
             placeholder="4 haneli Admin PIN"
             style="width: 100%;"
             @input="adminPinDuzenle"

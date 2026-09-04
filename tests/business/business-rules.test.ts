@@ -270,11 +270,30 @@ describe('para, stok ve iş emri controller iş kuralları', () => {
     expect(report.dashboardDebts.result.debts.map((item: any) => item.remaining_debt)).toEqual([400, 300, 200])
   })
 
+  it('yanlış girilen borcu günceller ve kalan bakiyeyi yeniden hesaplar', () => {
+    expect(report.dashboardDebtEdit.result.success).toBe(true)
+    expect(report.dashboardDebtEdit.transaction).toMatchObject({
+      date: '2024-02-01',
+      transaction_type: 'Mal / Parça Alışı',
+      description: 'Düzeltilmiş borç',
+      amount: 500,
+      note: 'Yanlış tutar düzeltildi',
+      due_date: '2024-02-10'
+    })
+    expect(report.dashboardDebtEdit.dashboard).toMatchObject({
+      success: true,
+      totalDebt: 1390,
+      openAccountCount: 4
+    })
+    expect(report.dashboardDebtEdit.dashboard.debts.map((item: any) => item.remaining_debt)).toEqual([490, 400, 300])
+  })
+
   it('kapalı güne ödeme, ödeme iptali, cari ödeme ve gider ekletmez', () => {
     expect(report.closedDay.closeResult.success).toBe(true)
     expect(Object.values(report.closedDay.results).every((result: any) => result.success === false)).toBe(true)
     expect(report.closedDay.afterCounts).toEqual(report.closedDay.beforeCounts)
     expect(report.closedDay.payment).toMatchObject({ is_cancelled: 0, cancelled_at: null, cancel_reason: null })
+    expect(report.closedDay.accountTransaction).toMatchObject({ description: 'Kapanış öncesi cari işlem', amount: 75 })
     expect(report.closedDay.closing.closing_date).toBe('2024-01-16')
     expect(report.closedDay.logCount).toBe(0)
   })

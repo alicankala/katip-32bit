@@ -87,6 +87,7 @@ veritabaniSifirla: () => Promise<{ success: boolean; backupPath?: string; restar
     cariHesapSil: (id: number) => Promise<any>
     cariIslemleriGetir: (currentAccountId: number) => Promise<any>
     cariIslemEkle: (islem: any) => Promise<any>
+    cariIslemGuncelle: (islem: any) => Promise<any>
     cariIslemSil: (id: number) => Promise<any>
     cariOdemeleriGetir: (currentAccountId: number) => Promise<any>
     cariOdemeEkle: (odeme: any) => Promise<any>

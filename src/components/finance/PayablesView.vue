@@ -185,7 +185,7 @@ const getCariTipClass = (type) => {
         </template>
       </Column>
 
-      <Column header="İşlemler" style="text-align: center; width: 230px;">
+      <Column header="İşlemler" style="text-align: center; width: 275px;">
         <template #body="slotProps">
           <div style="display: flex; gap: 4px; justify-content: center;">
             <Button
@@ -198,11 +198,10 @@ const getCariTipClass = (type) => {
               @click="emit('select-cari', slotProps.data)"
             />
             <Button
-              label="İşlem"
+              label="Borç Ekle"
               icon="pi pi-plus"
               size="small"
-              severity="warning"
-              outlined
+              severity="danger"
               title="Borç Ekle"
               :disabled="destekModu"
               @click="emit('add-transaction', slotProps.data)"
@@ -211,8 +210,7 @@ const getCariTipClass = (type) => {
               label="Öde"
               icon="pi pi-check"
               size="small"
-              severity="danger"
-              outlined
+              severity="success"
               title="Ödeme Yap"
               :disabled="destekModu"
               @click="emit('add-payment', slotProps.data)"

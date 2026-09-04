@@ -296,33 +296,36 @@ const giderDongusuBitti = (gider) => (
 
       <Column field="note" header="Açıklama / Not"></Column>
 
-      <Column header="İşlem" style="text-align: center; width: 140px;">
+      <Column header="İşlemler" headerClass="expense-actions-column" bodyClass="expense-actions-column" style="text-align: center; width: 250px;">
         <template #body="slotProps">
-          <div style="display: flex; gap: 4px; justify-content: center;">
+          <div class="expense-actions">
             <Button
               v-if="slotProps.data.status !== 'Ödendi'"
+              class="expense-pay-button"
+              label="Öde"
               icon="pi pi-check"
               severity="success"
-              text
-              rounded
-              title="Hızlı Öde"
+              size="small"
+              title="Gideri Öde"
               :disabled="destekModu"
               @click="emit('quick-pay', slotProps.data)"
             />
             <Button
+              label="Düzenle"
               icon="pi pi-pencil"
               severity="info"
-              text
-              rounded
+              outlined
+              size="small"
               title="Düzenle"
               :disabled="destekModu"
               @click="emit('edit-expense', slotProps.data)"
             />
             <Button
+              label="Sil"
               icon="pi pi-trash"
               severity="danger"
-              text
-              rounded
+              outlined
+              size="small"
               title="Sil"
               :disabled="destekModu"
               @click="emit('delete-expense', slotProps.data)"
@@ -380,6 +383,12 @@ const giderDongusuBitti = (gider) => (
 .text-green  { color: #10b981 !important; }
 .text-red    { color: #ef4444 !important; }
 .text-orange { color: #f59e0b !important; }
+
+.expense-actions {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+}
 
 .expired-cycles {
   display: flex;
@@ -439,6 +448,28 @@ const giderDongusuBitti = (gider) => (
 @media (max-width: 900px) {
   .expenses-stats-row {
     grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 1400px) {
+  :deep(.expense-actions-column) {
+    width: 180px !important;
+    min-width: 180px;
+  }
+
+  .expense-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5px;
+  }
+
+  .expense-pay-button {
+    grid-column: 1 / -1;
+  }
+
+  .expense-actions :deep(button) {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>

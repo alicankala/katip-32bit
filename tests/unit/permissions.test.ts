@@ -40,6 +40,7 @@ describe('destek modu izin matrisi', () => {
       'musteri-ekle',
       'arac-ekle',
       'parca-ekle',
+      'cari-islem-guncelle',
       'cari-odeme-ekle',
       'gider-ekle',
       'gun-sonu-kapat'

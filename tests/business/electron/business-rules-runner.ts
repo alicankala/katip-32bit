@@ -486,6 +486,26 @@ async function calistir(): Promise<void> {
       paymentResult: dashboardDebtPayment
     }
 
+    const editedDashboardDebt = cagir('cari-islem-guncelle', {
+      id: dashboardDebtAccounts[0].transaction.id,
+      current_account_id: dashboardDebtAccounts[0].account.id,
+      date: '2024-02-01',
+      transaction_type: 'Mal / Parça Alışı',
+      description: 'Düzeltilmiş borç',
+      amount: 500,
+      note: 'Yanlış tutar düzeltildi',
+      due_date: '2024-02-10'
+    })
+    report.dashboardDebtEdit = {
+      result: editedDashboardDebt,
+      transaction: db.prepare(`
+        SELECT current_account_id, date, transaction_type, description, amount, note, due_date
+        FROM account_transactions
+        WHERE id = ?
+      `).get(dashboardDebtAccounts[0].transaction.id),
+      dashboard: cagir('ana-panel-borclari-getir', 3)
+    }
+
     // Kapalı güne ekleme ve iptal girişimleri hiçbir kayıt değiştirmemeli.
     const closedDate = '2024-01-16'
     const closedWo = isEmriOlustur(100)
@@ -497,6 +517,14 @@ async function calistir(): Promise<void> {
       note: 'Kapanış öncesi ödeme'
     })
     if (!closedInitialPayment?.success) throw new Error(closedInitialPayment?.error || 'Kapanis fixture odemesi eklenemedi.')
+    const closedAccountTransaction = cagir('cari-islem-ekle', {
+      current_account_id: borcAccount.id,
+      date: closedDate,
+      transaction_type: 'Borç',
+      description: 'Kapanış öncesi cari işlem',
+      amount: 75
+    })
+    if (!closedAccountTransaction?.success) throw new Error(closedAccountTransaction?.error || 'Kapanis cari islemi eklenemedi.')
     const closedPaymentRow = db.prepare('SELECT id FROM work_order_payments WHERE work_order_id = ?').get(closedWo.workOrderId) as DbRow
     const closeResult = cagir('gun-sonu-kapat', {
       closing_date: closedDate,
@@ -526,6 +554,14 @@ async function calistir(): Promise<void> {
       payment_method: 'Nakit',
       description: 'Yasak cari ödeme'
     })
+    const closedAccountEdit = cagir('cari-islem-guncelle', {
+      id: closedAccountTransaction.id,
+      current_account_id: borcAccount.id,
+      date: closedDate,
+      transaction_type: 'Borç',
+      description: 'Yasak geriye dönük düzeltme',
+      amount: 125
+    })
     const closedExpenseAdd = cagir('gider-ekle', {
       expense_type: 'Yasak gider',
       expense_date: closedDate,
@@ -536,7 +572,7 @@ async function calistir(): Promise<void> {
     })
     report.closedDay = {
       closeResult,
-      results: { closedWorkOrderAdd, closedWorkOrderCancel, closedAccountAdd, closedExpenseAdd },
+      results: { closedWorkOrderAdd, closedWorkOrderCancel, closedAccountAdd, closedAccountEdit, closedExpenseAdd },
       beforeCounts: beforeClosedCounts,
       afterCounts: {
         workOrderPayments: sayi(db.prepare('SELECT COUNT(*) AS count FROM work_order_payments WHERE payment_date = ?').get(closedDate).count),
@@ -544,6 +580,7 @@ async function calistir(): Promise<void> {
         expenses: sayi(db.prepare('SELECT COUNT(*) AS count FROM general_expenses WHERE payment_date = ?').get(closedDate).count)
       },
       payment: db.prepare('SELECT is_cancelled, cancelled_at, cancel_reason FROM work_order_payments WHERE id = ?').get(closedPaymentRow.id),
+      accountTransaction: db.prepare('SELECT description, amount FROM account_transactions WHERE id = ?').get(closedAccountTransaction.id),
       closing: db.prepare('SELECT closing_date, total_collected FROM daily_closings WHERE closing_date = ?').get(closedDate),
       logCount: sayi(db.prepare('SELECT COUNT(*) AS count FROM work_order_logs WHERE work_order_id = ?').get(closedWo.workOrderId).count)
     }

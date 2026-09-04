@@ -17,6 +17,7 @@ import { firmaBilgileri, firmaIletisimSatirlari } from '../data/firmaBilgileri.j
 import PaymentOverview from '../components/finance/PaymentOverview.vue'
 import ReceivablesView from '../components/finance/ReceivablesView.vue'
 import PayablesView from '../components/finance/PayablesView.vue'
+import CompaniesView from '../components/finance/CompaniesView.vue'
 import ExpensesView from '../components/finance/ExpensesView.vue'
 import MovementsView from '../components/finance/MovementsView.vue'
 import ProfitReport from './ProfitReport.vue'
@@ -38,6 +39,7 @@ function bugununTarihi() {
 const cariler = ref([])
 const seciliCari = ref(null)
 const aktifAnaSekme = ref('genel-ozet') // 'genel-ozet' | 'alacaklar' | 'borclar' | 'giderler' | 'karlilik' | 'tum-hareketler'
+const aktifBorcAltSekmesi = ref('borc-listesi')
 const sayfaYukleniyor = ref(true)
 
 // İlişkili Veri Listeleri
@@ -70,6 +72,7 @@ const odemeDialogAcik = ref(false)
 const musteriOdemeDialogAcik = ref(false)
 const giderFormDialog = ref(false)
 const isEditingGider = ref(false)
+const giderOdemeModu = ref(false)
 const cariDetayDialog = ref(false)
 
 const toast = useToast()
@@ -572,7 +575,7 @@ const cariDuzenleAc = (cari) => {
     type: cari.type,
     phone: cari.phone,
     note: cari.note,
-    direction: 'Borç'
+    direction: cari.direction || 'Borç'
   })
   cariDetayDialog.value = false
   cariDialogAcik.value = true
@@ -659,6 +662,29 @@ const islemEkleAc = (cari) => {
   islemDialogAcik.value = true
 }
 
+const cariIslemDuzenleAc = (islem) => {
+  if (destekModundaEngelle(toast, 'Cari işlem düzenleme destek modunda yapılamaz.')) return
+
+  const target = seciliCari.value
+  if (!target || !islem?.id) return
+
+  borcCariSec(target)
+  Object.assign(islemForm, {
+    id: islem.id,
+    current_account_id: target.id,
+    date: islem.date || bugununTarihi(),
+    transaction_type: islem.transaction_type || 'Diğer',
+    description: islem.description || '',
+    amount: Number(islem.amount || 0),
+    vehicle_id: islem.vehicle_id || null,
+    work_order_id: islem.work_order_id || null,
+    note: islem.note || '',
+    due_date: islem.due_date || ''
+  })
+  cariDetayDialog.value = false
+  islemDialogAcik.value = true
+}
+
 const borcEkleDialogAc = () => {
   if (destekModundaEngelle(toast, 'Borç ekleme destek modunda yapılamaz.')) return
 
@@ -708,6 +734,7 @@ const islemKaydet = async () => {
 
   borcKaydediliyor.value = true
   try {
+    const duzenleniyor = Boolean(islemForm.id)
     let cariId = islemForm.current_account_id
     let yeniCariOlusturuldu = false
 
@@ -732,11 +759,15 @@ const islemKaydet = async () => {
     }
 
     const veri = JSON.parse(JSON.stringify({ ...islemForm, current_account_id: cariId }))
-    const res = await window.api.cariIslemEkle(veri)
+    const res = duzenleniyor
+      ? await window.api.cariIslemGuncelle(veri)
+      : await window.api.cariIslemEkle(veri)
     if (res?.success) {
-      basariMesaji(yeniCariOlusturuldu
-        ? 'Yeni kişi/firma oluşturuldu ve borç kaydedildi.'
-        : 'Borç başarıyla kaydedildi.')
+      basariMesaji(duzenleniyor
+        ? 'Borç kaydı güncellendi.'
+        : yeniCariOlusturuldu
+          ? 'Yeni kişi/firma oluşturuldu ve borç kaydedildi.'
+          : 'Borç başarıyla kaydedildi.')
       islemDialogAcik.value = false
       await carileriYukle()
       if (seciliCari.value) await cariDetaylariniYukle(seciliCari.value)
@@ -830,6 +861,7 @@ const giderEkleDialogAc = () => {
 
   aktifAnaSekme.value = 'giderler'
   isEditingGider.value = false
+  giderOdemeModu.value = false
   resetGiderForm()
   giderFormDialog.value = true
 }
@@ -838,6 +870,7 @@ const giderDuzenle = (gider) => {
   if (destekModundaEngelle(toast, 'Gider düzenleme destek modunda yapılamaz.')) return
 
   isEditingGider.value = true
+  giderOdemeModu.value = false
   giderForm.value = {
     ...gider,
     recurrence_type: gider.recurrence_type || 'Tek Seferlik',
@@ -851,6 +884,7 @@ const giderDongusuYenile = (gider) => {
   if (destekModundaEngelle(toast, 'Gider döngüsü yenileme destek modunda yapılamaz.')) return
 
   isEditingGider.value = false
+  giderOdemeModu.value = false
   resetGiderForm()
   Object.assign(giderForm.value, {
     expense_type: gider.expense_type || '',
@@ -906,7 +940,9 @@ const giderKaydet = async () => {
       : await window.api.giderEkle(payload)
 
     if (res?.success) {
-      basariMesaji(isEditingGider.value
+      basariMesaji(giderOdemeModu.value
+        ? 'Gider ödemesi kaydedildi.'
+        : isEditingGider.value
         ? 'Gider kaydı güncellendi.'
         : giderForm.value.renewed_from_root_id
           ? 'Aylık gider yeni tutar ve taahhütle yenilendi.'
@@ -914,6 +950,7 @@ const giderKaydet = async () => {
             ? 'Aylık gider döngüsü oluşturuldu.'
             : 'Gider kaydı eklendi.')
       giderFormDialog.value = false
+      giderOdemeModu.value = false
       await giderleriYukle()
     } else {
       hataMesaji(res?.error || 'Gider kaydedilemedi.')
@@ -1006,28 +1043,21 @@ const cariOdemeSil = (odeme) => {
   })
 }
 
-const hizliOde = async (gider) => {
+const hizliOde = (gider) => {
   if (destekModundaEngelle(toast, 'Gider ödemesi destek modunda yapılamaz.')) return
 
-  const bugun = bugununTarihi()
-  const guncelGider = {
+  isEditingGider.value = true
+  giderOdemeModu.value = true
+  giderForm.value = {
     ...gider,
     status: 'Ödendi',
-    payment_date: bugun,
-    payment_method: 'EFT/Havale'
+    payment_date: gider.payment_date || bugununTarihi(),
+    payment_method: gider.payment_method || 'Nakit',
+    recurrence_type: gider.recurrence_type || 'Tek Seferlik',
+    recurrence_end_date: gider.recurrence_end_date || '',
+    renewed_from_root_id: null
   }
-
-  try {
-    const res = await window.api.giderGuncelle(guncelGider)
-    if (res?.success) {
-      basariMesaji('Gider ödemesi kaydedildi (EFT/Havale).')
-      await giderleriYukle()
-    } else {
-      hataMesaji(res?.error || 'Ödeme kaydedilemedi.')
-    }
-  } catch (error) {
-    hataMesaji('Ödeme sırasında hata oluştu.')
-  }
+  giderFormDialog.value = true
 }
 
 const verileriYenileDetayli = async () => {
@@ -1482,42 +1512,42 @@ onUnmounted(() => {
         label="Genel Özet" 
         icon="pi pi-th-large" 
         :text="aktifAnaSekme !== 'genel-ozet'"
-        severity="info" 
+        :severity="aktifAnaSekme === 'genel-ozet' ? 'info' : 'secondary'"
         @click="aktifAnaSekme = 'genel-ozet'" 
       />
       <Button 
         label="Borçlar" 
         icon="pi pi-arrow-up-right" 
         :text="aktifAnaSekme !== 'borclar'"
-        severity="danger" 
+        :severity="aktifAnaSekme === 'borclar' ? 'danger' : 'secondary'"
         @click="aktifAnaSekme = 'borclar'" 
       />
       <Button
         label="Giderler"
         icon="pi pi-receipt"
         :text="aktifAnaSekme !== 'giderler'"
-        severity="warning"
+        :severity="aktifAnaSekme === 'giderler' ? 'warning' : 'secondary'"
         @click="aktifAnaSekme = 'giderler'"
       />
       <Button
         label="Alacaklar"
         icon="pi pi-car"
         :text="aktifAnaSekme !== 'alacaklar'"
-        severity="success"
+        :severity="aktifAnaSekme === 'alacaklar' ? 'success' : 'secondary'"
         @click="aktifAnaSekme = 'alacaklar'"
       />
       <Button
         label="Kârlılık"
         icon="pi pi-chart-line"
         :text="aktifAnaSekme !== 'karlilik'"
-        severity="success"
+        :severity="aktifAnaSekme === 'karlilik' ? 'help' : 'secondary'"
         @click="aktifAnaSekme = 'karlilik'"
       />
       <Button
         label="Geçmiş"
         icon="pi pi-list"
         :text="aktifAnaSekme !== 'tum-hareketler'"
-        severity="secondary"
+        :severity="aktifAnaSekme === 'tum-hareketler' ? 'contrast' : 'secondary'"
         @click="aktifAnaSekme = 'tum-hareketler'"
       />
     </div>
@@ -1553,7 +1583,12 @@ onUnmounted(() => {
 
       <!-- Borçlar (Tedarikçi & Taşeron Borçları) -->
       <div v-else-if="aktifAnaSekme === 'borclar'" key="borclar">
+        <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <Button label="Borç Listesi" icon="pi pi-list" size="small" severity="danger" :outlined="aktifBorcAltSekmesi !== 'borc-listesi'" @click="aktifBorcAltSekmesi = 'borc-listesi'" />
+          <Button label="Firmalar" icon="pi pi-building" size="small" severity="info" :outlined="aktifBorcAltSekmesi !== 'firmalar'" @click="aktifBorcAltSekmesi = 'firmalar'" />
+        </div>
         <PayablesView
+          v-if="aktifBorcAltSekmesi === 'borc-listesi'"
           :suppliers="cariler"
           :supplierTypes="dinamikCariTipleri"
           @add-debt="borcEkleDialogAc"
@@ -1561,6 +1596,13 @@ onUnmounted(() => {
           :destek-modu="destekModu"
           @add-transaction="islemEkleAc"
           @add-payment="odemeEkleAc"
+        />
+        <CompaniesView
+          v-else
+          :accounts="cariler"
+          :destek-modu="destekModu"
+          @edit-account="cariDuzenleAc"
+          @select-account="cariDetaylariniYukle"
         />
       </div>
 
@@ -1700,7 +1742,7 @@ onUnmounted(() => {
     <!-- MODAL 3: Borç Ekle -->
     <Dialog 
       v-model:visible="islemDialogAcik" 
-      header="Yeni Borç Ekle"
+      :header="islemForm.id ? 'Borcu Düzenle' : 'Yeni Borç Ekle'"
       :style="{ width: '520px' }"
       modal
     >
@@ -1716,6 +1758,7 @@ onUnmounted(() => {
             placeholder="Geçmişten seçin veya yeni bir ad yazın"
             style="width: 100%;"
             inputStyle="width: 100%;"
+            :disabled="Boolean(islemForm.id)"
             @complete="borcCariAra"
           >
             <template #option="slotProps">
@@ -1732,7 +1775,7 @@ onUnmounted(() => {
           style="background: var(--bg-active-box); padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; gap: 10px;"
         >
           <span><i class="pi pi-check-circle" style="color: #34d399; margin-right: 6px;" />Geçmiş kayıt seçildi: <strong>{{ borcCariSecimi.name }}</strong></span>
-          <Button label="Değiştir" size="small" text @click="borcCariSecimi = null" />
+          <Button v-if="!islemForm.id" label="Değiştir" size="small" text @click="borcCariSecimi = null" />
         </div>
 
         <div
@@ -1813,7 +1856,7 @@ onUnmounted(() => {
 
       <template #footer>
         <Button label="İptal" icon="pi pi-times" text @click="islemDialogAcik = false" />
-        <Button label="Borcu Kaydet" icon="pi pi-check" severity="warning" :disabled="destekModu || borcKaydediliyor" :loading="borcKaydediliyor" @click="islemKaydet" />
+        <Button :label="islemForm.id ? 'Değişiklikleri Kaydet' : 'Borcu Kaydet'" icon="pi pi-check" severity="warning" :disabled="destekModu || borcKaydediliyor" :loading="borcKaydediliyor" @click="islemKaydet" />
       </template>
     </Dialog>
 
@@ -1853,18 +1896,37 @@ onUnmounted(() => {
 
       <template #footer>
         <Button label="İptal" icon="pi pi-times" text @click="odemeDialogAcik = false" />
-        <Button label="Ödemeyi Kaydet" icon="pi pi-check" severity="danger" :disabled="destekModu" @click="odemeKaydet" />
+        <Button label="Ödemeyi Kaydet" icon="pi pi-check" severity="success" :disabled="destekModu" @click="odemeKaydet" />
       </template>
     </Dialog>
 
     <!-- MODAL 5: Gider Ekle / Düzenle -->
     <Dialog
       v-model:visible="giderFormDialog"
-      :header="isEditingGider ? 'Gider Kaydını Düzenle' : giderForm.renewed_from_root_id ? 'Aylık Gideri Yeni Tutarla Yenile' : 'Yeni İşletme Gideri Kaydı'"
+      :header="giderOdemeModu ? 'Gideri Öde' : isEditingGider ? 'Gider Kaydını Düzenle' : giderForm.renewed_from_root_id ? 'Aylık Gideri Yeni Tutarla Yenile' : 'Yeni İşletme Gideri Kaydı'"
       :style="{ width: '520px' }"
       modal
     >
-      <div class="dialog-form" style="display: flex; flex-direction: column; gap: 14px;">
+      <div v-if="giderOdemeModu" class="dialog-form" style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="padding: 12px; border-radius: 8px; background: var(--bg-active-box); border: 1px solid var(--border-color);">
+          <strong>{{ giderForm.company_name || giderForm.expense_type }}</strong>
+          <div style="margin-top: 5px; color: var(--text-muted);">{{ giderForm.expense_type }} · {{ tlFormatla(giderForm.amount) }}</div>
+        </div>
+        <div class="form-group">
+          <label>Ödeme Tarihi <span class="zorunlu-alan">*</span></label>
+          <InputText type="date" v-model="giderForm.payment_date" style="width: 100%;" />
+        </div>
+        <div class="form-group">
+          <label>Ödeme Yöntemi <span class="zorunlu-alan">*</span></label>
+          <Dropdown v-model="giderForm.payment_method" :options="['Nakit', 'Kart', 'Havale / EFT', 'Diğer']" style="width: 100%;" />
+        </div>
+        <div class="form-group">
+          <label>Açıklama / Not</label>
+          <InputText v-model="giderForm.note" placeholder="Ek not..." style="width: 100%;" />
+        </div>
+      </div>
+
+      <div v-else class="dialog-form" style="display: flex; flex-direction: column; gap: 14px;">
         <div class="form-group">
           <label>Gider Türü <span class="zorunlu-alan">*</span></label>
           <Dropdown v-model="giderForm.expense_type" :options="giderTurleri" editable placeholder="Tür seçin veya yazın" style="width: 100%;" />
@@ -1954,7 +2016,7 @@ onUnmounted(() => {
 
       <template #footer>
         <Button label="İptal" icon="pi pi-times" text @click="giderFormDialog = false" />
-        <Button label="Gideri Kaydet" icon="pi pi-check" severity="warning" :disabled="destekModu" @click="giderKaydet" />
+        <Button :label="giderOdemeModu ? 'Ödemeyi Kaydet' : 'Gideri Kaydet'" icon="pi pi-check" :severity="giderOdemeModu ? 'success' : 'warning'" :disabled="destekModu" @click="giderKaydet" />
       </template>
     </Dialog>
 
@@ -1993,17 +2055,31 @@ onUnmounted(() => {
               <strong>{{ tlFormatla(slotProps.data.amount) }}</strong>
             </template>
           </Column>
-          <Column header="İşlem" style="width: 80px; text-align: center;">
+          <Column header="İşlem" style="width: 120px; text-align: center;">
             <template #body="slotProps">
-              <Button
-                icon="pi pi-trash"
-                outlined
-                rounded
-                severity="danger"
-                size="small"
-                :disabled="destekModu"
-                @click="slotProps.data.transaction_type ? cariIslemSil(slotProps.data) : cariOdemeSil(slotProps.data)"
-              />
+              <div style="display: flex; justify-content: center; gap: 6px;">
+                <Button
+                  v-if="slotProps.data.transaction_type"
+                  icon="pi pi-pencil"
+                  outlined
+                  rounded
+                  severity="info"
+                  size="small"
+                  title="Borcu Düzenle"
+                  :disabled="destekModu"
+                  @click="cariIslemDuzenleAc(slotProps.data)"
+                />
+                <Button
+                  icon="pi pi-trash"
+                  outlined
+                  rounded
+                  severity="danger"
+                  size="small"
+                  title="Kaydı Sil"
+                  :disabled="destekModu"
+                  @click="slotProps.data.transaction_type ? cariIslemSil(slotProps.data) : cariOdemeSil(slotProps.data)"
+                />
+              </div>
             </template>
           </Column>
         </DataTable>

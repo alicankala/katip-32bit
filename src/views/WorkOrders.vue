@@ -2048,6 +2048,7 @@ onUnmounted(() => {
                 type="number"
                 v-model="kalemForm.unit_price"
                 style="width: 100%"
+                @keydown.enter.prevent="kalemKaydet"
               />
             </div>
 

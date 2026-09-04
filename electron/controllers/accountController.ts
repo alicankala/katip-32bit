@@ -330,7 +330,63 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
     }
   })
 
-  // 7. Cari İşlem Sil
+  // 7. Cari İşlem Güncelle
+  kanalEkle('cari-islem-guncelle', (_event, islem: any) => {
+    try {
+      const id = Number(islem.id)
+      const current_account_id = Number(islem.current_account_id)
+      const date = String(islem.date || '').trim()
+      const transaction_type = String(islem.transaction_type || '').trim()
+      const description = String(islem.description || '').trim()
+      const amount = Number(islem.amount) || 0
+      const vehicle_id = islem.vehicle_id ? Number(islem.vehicle_id) : null
+      const work_order_id = islem.work_order_id ? Number(islem.work_order_id) : null
+      const note = String(islem.note || '').trim()
+      const due_date = String(islem.due_date || '').trim() || null
+
+      if (!id) throw new Error('Güncellenecek cari işlem bulunamadı.')
+      if (!current_account_id) throw new Error('İşlem için cari hesap seçilmelidir.')
+      if (!date) throw new Error('Tarih alanı boş bırakılamaz.')
+      if (!transaction_type) throw new Error('İşlem tipi seçilmelidir.')
+      if (amount <= 0) throw new Error('İşlem tutarı sıfırdan büyük olmalıdır.')
+
+      const mevcutIslem = db.prepare(`
+        SELECT id, date
+        FROM account_transactions
+        WHERE id = ?
+      `).get(id) as any
+      if (!mevcutIslem) throw new Error('Güncellenecek cari işlem bulunamadı.')
+
+      // Kapanmış bir günün kaydı değiştirilemez ve kayıt kapanmış başka bir güne taşınamaz.
+      kapaliGunKontrol(mevcutIslem.date)
+      if (date !== mevcutIslem.date) kapaliGunKontrol(date)
+
+      db.prepare(`
+        UPDATE account_transactions
+        SET current_account_id = ?, date = ?, transaction_type = ?, description = ?,
+            amount = ?, vehicle_id = ?, work_order_id = ?, note = ?, due_date = ?
+        WHERE id = ?
+      `).run(
+        current_account_id,
+        date,
+        transaction_type,
+        description,
+        amount,
+        vehicle_id,
+        work_order_id,
+        note,
+        due_date,
+        id
+      )
+
+      return { success: true }
+    } catch (error) {
+      console.error('Cari işlem güncelleme hatası:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 8. Cari İşlem Sil
   kanalEkle('cari-islem-sil', (_event, id: number) => {
     try {
       const transactionId = Number(id)
